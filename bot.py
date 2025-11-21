@@ -116,11 +116,11 @@ def get_faq_markup():
     )
     
     markup.row(
-        telebot.types.InlineKeyboardButton(text='Иксы на авито не работают', callback_data='faq_x_fail')
+        telebot.types.InlineKeyboardButton(text='Иксы на авито не работают', url='https://t.me/Avitounlock/21') # <--- ИСПРАВЛЕНО
     )
     
     markup.row(
-        telebot.types.InlineKeyboardButton(text='Кейсы и отзывы', url='https://t.me/Avitounlock/20') # <--- ИСПРАВЛЕНО
+        telebot.types.InlineKeyboardButton(text='Кейсы и отзывы', url='https://t.me/Avitounlock/20') 
     )
     
     markup.row(
@@ -198,27 +198,10 @@ def callback_inline(call):
             "добавляют в избранное"
         )
         
-        x_fail_text = (
-            "*Лучший способ использования иксов – это совмещать их с ПФ*\n\n"
-            "Условно делаем 7 дней ПФ по 50 штук, далее авито решает, что ваши "
-            "средние просмотры = **50**.\n\n"
-            "Подключаем х10 и авито всеми силами пытается оправдать название «Х10» "
-            "и сделать вам **500 просмотров**, а именно забрасывает в топ, "
-            "показывает везде в рекомендациях и на главной странице.\n\n"
-            "Поэтому иксы **очень эффективно использовать вместе с ПФ**.\n\n"
-            "‼️ *Помним, что кнопки «бабло» не существует, нужно тестировать стратегии.*"
-        )
-        
         # --- Определяем текст в зависимости от faq_key ---
         if faq_key == 'pf_how':
             response_text = pf_how_text
-        elif faq_key == 'x_fail':
-            response_text = x_fail_text
-        elif faq_key == 'cases':
-             # Эта секция не должна срабатывать, так как кнопка 'cases' теперь url,
-             # но мы оставляем заглушку на случай прямого вызова.
-            response_text = "Вы выбрали тему: **Кейсы и отзывы** (эта кнопка теперь ведет на внешний канал)."
-        else: # faq_intro и другие
+        else: # faq_intro и другие (cases и x_fail теперь URL-кнопки и не попадут сюда)
             response_text = f"Вы выбрали тему: **{faq_key}** (здесь будет подробный ответ)."
 
         # ИСПОЛЬЗУЕМ EDIT_MESSAGE_TEXT
