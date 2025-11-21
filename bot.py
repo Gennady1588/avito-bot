@@ -20,7 +20,7 @@ def safe_delete_message(chat_id, message_id):
         # print(f"Warning: Could not delete message {message_id} in chat {chat_id}. Error: {e}")
         pass # Игнорируем ошибку удаления
 
-# --- ФУНКЦИИ ДЛЯ КЛАВИАТУР ---
+# --- ФУНКЦИИ ДЛЯ КЛАВИАТУР (без изменений) ---
 
 def get_main_menu_markup():
     """Создает Inline Keyboard для главного меню."""
@@ -116,7 +116,7 @@ def get_faq_markup():
     )
     
     markup.row(
-        telebot.types.InlineKeyboardButton(text='Иксы на авито не работают', url='https://t.me/Avitounlock/21') # <--- ИСПРАВЛЕНО
+        telebot.types.InlineKeyboardButton(text='Иксы на авито не работают', url='https://t.me/Avitounlock/21') 
     )
     
     markup.row(
@@ -168,7 +168,18 @@ def callback_inline(call):
     
     # --- НАВИГАЦИЯ НАЗАД К ГЛАВНОМУ МЕНЮ ---
     if call.data == 'back_to_main_menu':
-        safe_delete_message(chat_id, message_id)
+        try:
+            bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text="📈 *ПФ на Авито*\nбот\n\nпозицию в результатах поиска. чем больше ПФ, тем выше ваше объявление в выдаче и тем больше людей его увидят!\n\n🔥 _Закажите накрутку ПФ прямо сейчас и наблюдайте, как Ваши объявления поднимаются в ТОП!_", 
+                reply_markup=get_main_menu_markup(),
+                parse_mode='Markdown'
+            )
+        except Exception:
+             # Если edit не удался (например, сообщение слишком старое), отправляем новое
+            safe_delete_message(chat_id, message_id)
+            start(call.message)
         
     elif call.data == 'start_again':
         start(call.message)
@@ -198,10 +209,22 @@ def callback_inline(call):
             "добавляют в избранное"
         )
         
+        faq_intro_text = (
+            "*Оглавление: Вопросы и ответы*\n\n"
+            "Выберите интересующий Вас раздел:\n\n"
+            "1. **Как работают поведенческие факторы**\n"
+            "2. **Иксы на авито не работают** (Переход на пост)\n"
+            "3. **Кейсы и отзывы** (Переход на пост)\n"
+            "4. **Вопросы и ответы** (Вы здесь)\n\n"
+            "Для выбора вернитесь в предыдущее меню, нажав '🔙 Назад'."
+        )
+        
         # --- Определяем текст в зависимости от faq_key ---
         if faq_key == 'pf_how':
             response_text = pf_how_text
-        else: # faq_intro и другие (cases и x_fail теперь URL-кнопки и не попадут сюда)
+        elif faq_key == 'intro':
+            response_text = faq_intro_text
+        else: # Сюда могут попасть только intro, pf_how, т.к. остальные — URL
             response_text = f"Вы выбрали тему: **{faq_key}** (здесь будет подробный ответ)."
 
         # ИСПОЛЬЗУЕМ EDIT_MESSAGE_TEXT
@@ -223,7 +246,7 @@ def callback_inline(call):
 
     # --- ЛИЧНЫЙ КАБИНЕТ ---
     elif call.data == 'my_account':
-        # ... (данные без изменений) ...
+        # ... (логика личного кабинета) ...
         balance = 155
         referral_link = f"https://t.me/avitoup1_bot?start={chat_id}" 
         referrals_count = 0
@@ -239,20 +262,39 @@ def callback_inline(call):
             "Связь с создателем @inkarmedia"
         )
         
-        safe_delete_message(chat_id, message_id)
-        bot.send_message(
-            chat_id, 
-            account_text, 
-            reply_markup=get_account_markup(),
-            parse_mode='Markdown'
-        )
+        # Используем edit_message_text для навигации из главного меню
+        try:
+            bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=account_text,
+                reply_markup=get_account_markup(),
+                parse_mode='Markdown'
+            )
+        except Exception:
+            safe_delete_message(chat_id, message_id)
+            bot.send_message(
+                chat_id, 
+                account_text, 
+                reply_markup=get_account_markup(),
+                parse_mode='Markdown'
+            )
         
     # --- ДРУГИЕ КНОПКИ БЕЗ ФУНКЦИОНАЛА ---
     elif call.data in ['promocodes', 'strategy', 'account_deposit', 'account_orders', 'account_partner']:
-        safe_delete_message(chat_id, message_id)
-        bot.send_message(chat_id, f"Вы нажали кнопку: {call.data}. Здесь будет соответствующая логика.")
+        try:
+            bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=f"Вы нажали кнопку: {call.data}. Здесь будет соответствующая логика.",
+                reply_markup=get_back_to_faq_markup() if 'faq' in call.data else get_main_menu_markup()
+            )
+        except Exception:
+            safe_delete_message(chat_id, message_id)
+            bot.send_message(chat_id, f"Вы нажали кнопку: {call.data}. Здесь будет соответствующая логика.")
 
-    # --- ЗАКАЗ ПФ: ЛОГИКА ---
+
+    # --- ЗАКАЗ ПФ: ЛОГИКА (ОСТАВЛЕНО С safe_delete_message для чистой навигации) ---
     elif call.data == 'order_pf':
         safe_delete_message(chat_id, message_id)
         bot.send_message(
