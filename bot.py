@@ -20,7 +20,7 @@ def safe_delete_message(chat_id, message_id):
         # print(f"Warning: Could not delete message {message_id} in chat {chat_id}. Error: {e}")
         pass # Игнорируем ошибку удаления
 
-# --- ФУНКЦИИ ДЛЯ КЛАВИАТУР (без изменений) ---
+# --- ФУНКЦИИ ДЛЯ КЛАВИАТУР ---
 
 def get_main_menu_markup():
     """Создает Inline Keyboard для главного меню."""
@@ -104,9 +104,10 @@ def get_account_markup():
     return markup
     
 def get_faq_markup():
-    """Создает Inline Keyboard для меню FAQ / Кейсы."""
+    """Создает Inline Keyboard для меню FAQ / Кейсы. Только одна кнопка 'Вопросы и ответы'."""
     markup = telebot.types.InlineKeyboardMarkup()
     
+    # *** ТОЛЬКО ОДНА КНОПКА "Вопросы и ответы" ***
     markup.row(
         telebot.types.InlineKeyboardButton(text='Вопросы и ответы', callback_data='faq_intro') 
     )
@@ -194,6 +195,8 @@ def callback_inline(call):
                 reply_markup=get_faq_markup()
             )
         except Exception:
+            # ИСПОЛЬЗУЕМ SAFE_DELETE ДЛЯ ПРЕДОТВРАЩЕНИЯ ДУБЛИРОВАНИЯ
+            safe_delete_message(chat_id, message_id)
             bot.send_message(chat_id, "Вопросы и ответы", reply_markup=get_faq_markup())
             
     # --- ДЕЙСТВИЯ ВНУТРИ FAQ ---
@@ -223,8 +226,9 @@ def callback_inline(call):
         if faq_key == 'pf_how':
             response_text = pf_how_text
         elif faq_key == 'intro':
+            # Оглавление, без кнопок, кроме "Назад"
             response_text = faq_intro_text
-        else: # Сюда ничего не должно попадать, но оставляем для безопасности
+        else: 
             response_text = f"Ошибка: Неизвестный ключ FAQ: {faq_key}"
 
         # ИСПОЛЬЗУЕМ EDIT_MESSAGE_TEXT
@@ -237,6 +241,8 @@ def callback_inline(call):
                 parse_mode='Markdown'
             )
         except Exception as e:
+            # ИСПОЛЬЗУЕМ SAFE_DELETE ДЛЯ ПРЕДОТВРАЩЕНИЯ ДУБЛИРОВАНИЯ
+            safe_delete_message(chat_id, message_id)
             bot.send_message(
                 chat_id, 
                 response_text, 
@@ -282,8 +288,7 @@ def callback_inline(call):
         
     # --- ДРУГИЕ КНОПКИ БЕЗ ФУНКЦИОНАЛА ---
     elif call.data in ['promocodes', 'strategy', 'account_deposit', 'account_orders', 'account_partner']:
-        # В этой секции нужно аккуратно обрабатывать навигацию "назад"
-        back_markup = get_back_to_faq_markup() if call.data == 'faq' else get_main_menu_markup()
+        back_markup = get_main_menu_markup() 
         
         try:
             bot.edit_message_text(
@@ -297,7 +302,7 @@ def callback_inline(call):
             bot.send_message(chat_id, f"Вы нажали кнопку: {call.data}. Здесь будет соответствующая логика.", reply_markup=back_markup)
 
 
-    # --- ЗАКАЗ ПФ: ЛОГИКА (ОСТАВЛЕНО С safe_delete_message для чистой навигации) ---
+    # --- ЗАКАЗ ПФ: ЛОГИКА ---
     elif call.data == 'order_pf':
         safe_delete_message(chat_id, message_id)
         bot.send_message(
