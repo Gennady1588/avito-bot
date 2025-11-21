@@ -26,7 +26,7 @@ def get_main_menu_markup():
     markup.row(
         # TODO: Заменить заглушки на реальные URL-адреса
         telebot.types.InlineKeyboardButton(text='📗 Правила пользования', url='https://your-rules.com'),
-        # ОБНОВЛЕННАЯ ССЫЛКА НА ТЕХ ПОДДЕРЖКУ
+        # ИСПРАВЛЕННАЯ ССЫЛКА НА ТЕХ ПОДДЕРЖКУ
         telebot.types.InlineKeyboardButton(text='🧑‍💻 Тех поддержка', url='https://t.me/Avitounlock') 
     )
     markup.row(
@@ -40,7 +40,7 @@ def get_main_menu_markup():
         telebot.types.InlineKeyboardButton(text='➖', callback_data='_divider')
     )
     markup.row(
-        # ИСПОЛЬЗУЕМ ССЫЛКУ, которую вы предоставили
+        # ССЫЛКА НА ПОСТ
         telebot.types.InlineKeyboardButton(text='Есть ли на Авито бан за ПФ!?', url='https://t.me/Avitounlock/19'),
         telebot.types.InlineKeyboardButton(text='➡️ /start', callback_data='start_again')
     )
