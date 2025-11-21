@@ -11,7 +11,17 @@ bot = telebot.TeleBot(TOKEN)
 orders = {}
 user_data = {} 
 
+# --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ БЕЗОПАСНОГО УДАЛЕНИЯ ---
+def safe_delete_message(chat_id, message_id):
+    """Пытается удалить сообщение, игнорируя ошибки, если сообщение уже удалено или недоступно."""
+    try:
+        bot.delete_message(chat_id, message_id)
+    except Exception as e:
+        # print(f"Warning: Could not delete message {message_id} in chat {chat_id}. Error: {e}")
+        pass # Игнорируем ошибку удаления
+
 # --- ФУНКЦИИ ДЛЯ КЛАВИАТУР ---
+# ... (Остальные функции get_..._markup без изменений) ...
 
 def get_main_menu_markup():
     """Создает Inline Keyboard для главного меню."""
@@ -85,7 +95,6 @@ def get_account_markup():
     markup.row(
         telebot.types.InlineKeyboardButton(text='📖 Мои заказы', callback_data='account_orders')
     )
-    
     markup.row(
         telebot.types.InlineKeyboardButton(text='🤝 Партнерская программа', callback_data='account_partner')
     )
@@ -156,22 +165,19 @@ def start(m):
 def callback_inline(call):
     bot.answer_callback_query(call.id)
     chat_id = call.message.chat.id
+    message_id = call.message.message_id
     
     # --- НАВИГАЦИЯ НАЗАД К ГЛАВНОМУ МЕНЮ ---
     if call.data == 'back_to_main_menu':
-        bot.delete_message(chat_id, call.message.message_id)
+        safe_delete_message(chat_id, message_id) # Безопасное удаление
         
     elif call.data == 'start_again':
         start(call.message)
         
     # --- ГЛАВНОЕ МЕНЮ: FAQ / КЕЙСЫ ---
     elif call.data == 'faq':
-        # Если нажали 'faq' (из главного меню или из кнопки 'Назад' в ответе)
-        # Удаляем предыдущее сообщение (если это ответ из 'Назад')
-        try:
-            bot.delete_message(chat_id, call.message.message_id)
-        except Exception:
-            pass # Игнорируем ошибку, если сообщение уже удалено или это первый вызов
+        # Удаляем предыдущее сообщение, если оно не было удалено
+        safe_delete_message(chat_id, message_id)
             
         bot.send_message(
             chat_id, 
@@ -183,8 +189,7 @@ def callback_inline(call):
     elif call.data.startswith('faq_'):
         faq_key = call.data.split('_')[1]
         
-        # Удаляем меню FAQ
-        bot.delete_message(chat_id, call.message.message_id)
+        safe_delete_message(chat_id, message_id) # Безопасное удаление меню FAQ
         
         if faq_key == 'pf_how':
             # --- РЕАЛИЗАЦИЯ ОТВЕТА НА ВОПРОС О ПФ ---
@@ -198,7 +203,7 @@ def callback_inline(call):
             bot.send_message(
                 chat_id, 
                 pf_how_text, 
-                reply_markup=get_back_to_faq_markup(), # Кнопка Назад к FAQ
+                reply_markup=get_back_to_faq_markup(),
                 parse_mode='Markdown'
             )
             
@@ -221,6 +226,7 @@ def callback_inline(call):
             
     # --- ЛИЧНЫЙ КАБИНЕТ ---
     elif call.data == 'my_account':
+        # ... (данные без изменений) ...
         balance = 155
         referral_link = f"https://t.me/avitoup1_bot?start={chat_id}" 
         referrals_count = 0
@@ -236,6 +242,7 @@ def callback_inline(call):
             "Связь с создателем @inkarmedia"
         )
         
+        safe_delete_message(chat_id, message_id) # Безопасное удаление
         bot.send_message(
             chat_id, 
             account_text, 
@@ -245,10 +252,12 @@ def callback_inline(call):
         
     # --- ДРУГИЕ КНОПКИ БЕЗ ФУНКЦИОНАЛА ---
     elif call.data in ['promocodes', 'strategy', 'account_deposit', 'account_orders', 'account_partner']:
+        safe_delete_message(chat_id, message_id) # Безопасное удаление
         bot.send_message(chat_id, f"Вы нажали кнопку: {call.data}. Здесь будет соответствующая логика.")
 
     # --- ЗАКАЗ ПФ: ЛОГИКА ---
     elif call.data == 'order_pf':
+        safe_delete_message(chat_id, message_id) # Безопасное удаление
         bot.send_message(
             chat_id, 
             "Выберите вариант:", 
@@ -259,7 +268,7 @@ def callback_inline(call):
         duration_key = call.data.split('_')[1] 
         user_data[chat_id]['duration'] = duration_key
         
-        bot.delete_message(chat_id, call.message.message_id) 
+        safe_delete_message(chat_id, message_id) # Безопасное удаление
         bot.send_message(
             chat_id, 
             "Выберите количество ПФ в день:", 
@@ -270,7 +279,7 @@ def callback_inline(call):
         pf_count = call.data.split('_')[2] 
         user_data[chat_id]['pf_count'] = pf_count
         
-        bot.delete_message(chat_id, call.message.message_id) 
+        safe_delete_message(chat_id, message_id) # Безопасное удаление
         
         final_text = (
             "Если вы будете запускать на несколько \n"
@@ -291,7 +300,7 @@ def callback_inline(call):
         
     # --- НАВИГАЦИЯ НАЗАД В ПРОЦЕССЕ ЗАКАЗА ---
     elif call.data == 'back_to_duration':
-        bot.delete_message(chat_id, call.message.message_id)
+        safe_delete_message(chat_id, message_id) # Безопасное удаление
         bot.send_message(
             chat_id, 
             "Выберите вариант:", 
@@ -299,7 +308,7 @@ def callback_inline(call):
         )
         
     elif call.data == 'back_to_pf_count':
-        bot.delete_message(chat_id, call.message.message_id)
+        safe_delete_message(chat_id, message_id) # Безопасное удаление
         bot.send_message(
             chat_id, 
             "Выберите количество ПФ в день:", 
