@@ -224,8 +224,8 @@ def callback_inline(call):
             response_text = pf_how_text
         elif faq_key == 'intro':
             response_text = faq_intro_text
-        else: # Сюда могут попасть только intro, pf_how, т.к. остальные — URL
-            response_text = f"Вы выбрали тему: **{faq_key}** (здесь будет подробный ответ)."
+        else: # Сюда ничего не должно попадать, но оставляем для безопасности
+            response_text = f"Ошибка: Неизвестный ключ FAQ: {faq_key}"
 
         # ИСПОЛЬЗУЕМ EDIT_MESSAGE_TEXT
         try:
@@ -282,16 +282,19 @@ def callback_inline(call):
         
     # --- ДРУГИЕ КНОПКИ БЕЗ ФУНКЦИОНАЛА ---
     elif call.data in ['promocodes', 'strategy', 'account_deposit', 'account_orders', 'account_partner']:
+        # В этой секции нужно аккуратно обрабатывать навигацию "назад"
+        back_markup = get_back_to_faq_markup() if call.data == 'faq' else get_main_menu_markup()
+        
         try:
             bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=message_id,
                 text=f"Вы нажали кнопку: {call.data}. Здесь будет соответствующая логика.",
-                reply_markup=get_back_to_faq_markup() if 'faq' in call.data else get_main_menu_markup()
+                reply_markup=back_markup
             )
         except Exception:
             safe_delete_message(chat_id, message_id)
-            bot.send_message(chat_id, f"Вы нажали кнопку: {call.data}. Здесь будет соответствующая логика.")
+            bot.send_message(chat_id, f"Вы нажали кнопку: {call.data}. Здесь будет соответствующая логика.", reply_markup=back_markup)
 
 
     # --- ЗАКАЗ ПФ: ЛОГИКА (ОСТАВЛЕНО С safe_delete_message для чистой навигации) ---
