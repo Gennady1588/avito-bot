@@ -5,12 +5,10 @@ import os
 app = Flask(__name__)
 
 # --- КОНФИГУРАЦИЯ ---
-# Используются переменные окружения для токена и ID владельца
 TOKEN = os.environ['TOKEN']
 OWNER_ID = int(os.environ['OWNER_ID'])
 bot = telebot.TeleBot(TOKEN)
 orders = {}
-# Временный словарь для хранения данных заказа пользователя (ВНИМАНИЕ: Сбрасывается при перезапуске)
 user_data = {} 
 
 # --- ФУНКЦИИ ДЛЯ КЛАВИАТУР ---
@@ -24,9 +22,7 @@ def get_main_menu_markup():
         telebot.types.InlineKeyboardButton(text='🚪 Личный кабинет', callback_data='my_account')
     )
     markup.row(
-        # TODO: Заменить заглушки на реальные URL-адреса
         telebot.types.InlineKeyboardButton(text='📗 Правила пользования', url='https://your-rules.com'),
-        # ИСПРАВЛЕННАЯ ССЫЛКА НА ТЕХ ПОДДЕРЖКУ
         telebot.types.InlineKeyboardButton(text='🧑‍💻 Тех поддержка', url='https://t.me/Avitounlock') 
     )
     markup.row(
@@ -40,7 +36,6 @@ def get_main_menu_markup():
         telebot.types.InlineKeyboardButton(text='➖', callback_data='_divider')
     )
     markup.row(
-        # ССЫЛКА НА ПОСТ
         telebot.types.InlineKeyboardButton(text='Есть ли на Авито бан за ПФ!?', url='https://t.me/Avitounlock/19'),
         telebot.types.InlineKeyboardButton(text='➡️ /start', callback_data='start_again')
     )
@@ -124,6 +119,14 @@ def get_faq_markup():
         telebot.types.InlineKeyboardButton(text='🔙 Назад', callback_data='back_to_main_menu') 
     )
     return markup
+    
+def get_back_to_faq_markup():
+    """Создает кнопку 'Назад' для возврата к меню FAQ."""
+    markup = telebot.types.InlineKeyboardMarkup()
+    markup.row(
+        telebot.types.InlineKeyboardButton(text='🔙 Назад', callback_data='faq') 
+    )
+    return markup
 
 
 # --- ОСНОВНЫЕ ОБРАБОТЧИКИ ---
@@ -131,7 +134,6 @@ def get_faq_markup():
 @bot.message_handler(commands=['start'])
 def start(m):
     user_id = m.chat.id
-    # Инициализация данных пользователя при старте
     if user_id not in user_data:
         user_data[user_id] = {}
     
@@ -157,15 +159,68 @@ def callback_inline(call):
     
     # --- НАВИГАЦИЯ НАЗАД К ГЛАВНОМУ МЕНЮ ---
     if call.data == 'back_to_main_menu':
-        # Удаляем сообщение, которое привело к возврату
         bot.delete_message(chat_id, call.message.message_id)
         
     elif call.data == 'start_again':
         start(call.message)
         
+    # --- ГЛАВНОЕ МЕНЮ: FAQ / КЕЙСЫ ---
+    elif call.data == 'faq':
+        # Если нажали 'faq' (из главного меню или из кнопки 'Назад' в ответе)
+        # Удаляем предыдущее сообщение (если это ответ из 'Назад')
+        try:
+            bot.delete_message(chat_id, call.message.message_id)
+        except Exception:
+            pass # Игнорируем ошибку, если сообщение уже удалено или это первый вызов
+            
+        bot.send_message(
+            chat_id, 
+            "Вопросы и ответы", 
+            reply_markup=get_faq_markup()
+        )
+        
+    # --- ДЕЙСТВИЯ ВНУТРИ FAQ ---
+    elif call.data.startswith('faq_'):
+        faq_key = call.data.split('_')[1]
+        
+        # Удаляем меню FAQ
+        bot.delete_message(chat_id, call.message.message_id)
+        
+        if faq_key == 'pf_how':
+            # --- РЕАЛИЗАЦИЯ ОТВЕТА НА ВОПРОС О ПФ ---
+            pf_how_text = (
+                "*Как поведенческие факторы помогают продвинуть объявление в топ:*\n\n"
+                "**Ctr объявлений поднимается** и ещё лучше Авито начинает продвигать "
+                "объявление так как видит, что много людей интересуются, создают "
+                "активность на объявление, просматривают номер телефона, "
+                "добавляют в избранное"
+            )
+            bot.send_message(
+                chat_id, 
+                pf_how_text, 
+                reply_markup=get_back_to_faq_markup(), # Кнопка Назад к FAQ
+                parse_mode='Markdown'
+            )
+            
+        elif faq_key == 'cases':
+            # TODO: Заменить на реальный контент
+            bot.send_message(
+                chat_id, 
+                "Вот наши лучшие **кейсы и отзывы**: [ссылка на канал/текст]", 
+                reply_markup=get_back_to_faq_markup(),
+                parse_mode='Markdown'
+            )
+        else:
+            # Заглушка для остальных вопросов
+            bot.send_message(
+                chat_id, 
+                f"Вы выбрали тему: **{faq_key}** (здесь будет подробный ответ).", 
+                reply_markup=get_back_to_faq_markup(),
+                parse_mode='Markdown'
+            )
+            
     # --- ЛИЧНЫЙ КАБИНЕТ ---
     elif call.data == 'my_account':
-        # TODO: Получать данные из БД!
         balance = 155
         referral_link = f"https://t.me/avitoup1_bot?start={chat_id}" 
         referrals_count = 0
@@ -188,25 +243,11 @@ def callback_inline(call):
             parse_mode='Markdown'
         )
         
-    # --- FAQ / КЕЙСЫ ---
-    elif call.data == 'faq':
-        bot.send_message(
-            chat_id, 
-            "Вопросы и ответы", 
-            reply_markup=get_faq_markup()
-        )
-        
-    # --- ДЕЙСТВИЯ ВНУТРИ FAQ (ЗАГЛУШКИ) ---
-    elif call.data.startswith('faq_'):
-        faq_key = call.data.split('_')[1]
-        
-        # TODO: Заменить на реальный контент
-        if faq_key == 'cases':
-            bot.send_message(chat_id, "Вот наши лучшие **кейсы и отзывы**: [ссылка на канал/текст]", parse_mode='Markdown')
-        else:
-            bot.send_message(chat_id, f"Вы выбрали тему: **{faq_key}** (здесь будет подробный ответ).", parse_mode='Markdown')
-            
-    # --- ЗАКАЗ ПФ (ШАГ 1): Вызов выбора дней ---
+    # --- ДРУГИЕ КНОПКИ БЕЗ ФУНКЦИОНАЛА ---
+    elif call.data in ['promocodes', 'strategy', 'account_deposit', 'account_orders', 'account_partner']:
+        bot.send_message(chat_id, f"Вы нажали кнопку: {call.data}. Здесь будет соответствующая логика.")
+
+    # --- ЗАКАЗ ПФ: ЛОГИКА ---
     elif call.data == 'order_pf':
         bot.send_message(
             chat_id, 
@@ -214,12 +255,10 @@ def callback_inline(call):
             reply_markup=get_duration_markup()
         )
         
-    # --- ЗАКАЗ ПФ (ШАГ 2): Выбор длительности -> переход к выбору ПФ в день ---
     elif call.data.startswith('duration_'):
         duration_key = call.data.split('_')[1] 
         user_data[chat_id]['duration'] = duration_key
         
-        # Удаляем предыдущее сообщение
         bot.delete_message(chat_id, call.message.message_id) 
         bot.send_message(
             chat_id, 
@@ -227,12 +266,10 @@ def callback_inline(call):
             reply_markup=get_pf_count_markup()
         )
 
-    # --- ЗАКАЗ ПФ (ШАГ 3): Выбор количества ПФ -> переход к запросу ссылки ---
     elif call.data.startswith('pf_count_'):
         pf_count = call.data.split('_')[2] 
         user_data[chat_id]['pf_count'] = pf_count
         
-        # Удаляем предыдущее сообщение
         bot.delete_message(chat_id, call.message.message_id) 
         
         final_text = (
@@ -251,7 +288,6 @@ def callback_inline(call):
             final_text, 
             reply_markup=final_markup
         )
-        # TODO: Здесь бот должен перейти в состояние ожидания текстового сообщения (ссылки)
         
     # --- НАВИГАЦИЯ НАЗАД В ПРОЦЕССЕ ЗАКАЗА ---
     elif call.data == 'back_to_duration':
@@ -270,20 +306,13 @@ def callback_inline(call):
             reply_markup=get_pf_count_markup()
         )
 
-    # --- ЗАГЛУШКИ ДЛЯ КНОПОК БЕЗ ФУНКЦИОНАЛА ---
-    elif call.data in ['promocodes', 'strategy', 'account_deposit', 'account_orders', 'account_partner']:
-        bot.send_message(chat_id, f"Вы нажали кнопку: {call.data}. Здесь будет соответствующая логика.")
 
-
-# --- ОБРАБОТЧИК СООБЩЕНИЙ КЛИЕНТОВ (ВКЛЮЧАЯ ССЫЛКИ НА ЗАКАЗ) ---
+# --- ОБРАБОТЧИК СООБЩЕНИЙ КЛИЕНТОВ ---
 @bot.message_handler(func=lambda m: m.chat.id != OWNER_ID)
 def client_msg(m):
     user_id = m.chat.id
     username = m.from_user.username or "без_юзернейма"
     text = m.text
-    
-    # TODO: Здесь нужно добавить проверку состояния заказа, чтобы понять, 
-    # является ли это сообщение ссылкой на объявление или простым вопросом.
     
     # Текущий функционал (любое сообщение идет админу)
     bot.send_message(
@@ -298,7 +327,6 @@ def admin_reply(m):
     reply = m.reply_to_message.text
     if "Новый заказ от" in reply or "Сообщение:" in reply:
         try:
-            # Парсинг ID клиента
             start_index = reply.find("ID: ") + 4
             end_index = reply.find(")", start_index)
             client_id = int(reply[start_index:end_index])
@@ -317,6 +345,5 @@ def webhook():
 
 if __name__ == '__main__':
     bot.remove_webhook()
-    # Убедитесь, что 'RENDER_EXTERNAL_HOSTNAME' задана в настройках хостинга
     bot.set_webhook(url=f"https://{os.environ['RENDER_EXTERNAL_HOSTNAME']}/{TOKEN}")
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
