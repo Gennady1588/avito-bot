@@ -102,12 +102,11 @@ def get_account_markup():
         telebot.types.InlineKeyboardButton(text='🔙 Назад', callback_data='back_to_main_menu')
     )
     return markup
-    
+
 def get_faq_markup():
     """Создает Inline Keyboard для меню FAQ / Кейсы."""
     markup = telebot.types.InlineKeyboardMarkup()
     
-    # Кнопка 'Вопросы и ответы' переименована в 'Справочник' для ясности
     markup.row(
         telebot.types.InlineKeyboardButton(text='Справочник (Оглавление)', callback_data='faq_intro') 
     )
@@ -134,6 +133,14 @@ def get_back_to_faq_markup():
     markup = telebot.types.InlineKeyboardMarkup()
     markup.row(
         telebot.types.InlineKeyboardButton(text='🔙 Назад', callback_data='faq') 
+    )
+    return markup
+
+def get_back_to_account_markup():
+    """Создает кнопку 'Назад' для возврата в Личный кабинет."""
+    markup = telebot.types.InlineKeyboardMarkup()
+    markup.row(
+        telebot.types.InlineKeyboardButton(text='🔙 Назад', callback_data='my_account') 
     )
     return markup
 
@@ -187,7 +194,7 @@ def callback_inline(call):
         
     # --- ГЛАВНОЕ МЕНЮ: FAQ / КЕЙСЫ ---
     elif call.data == 'faq':
-        # *** ИСПРАВЛЕНИЕ ДУБЛИРОВАНИЯ: УДАЛЯЕМ СТАРОЕ СООБЩЕНИЕ И ОТПРАВЛЯЕМ НОВОЕ ***
+        # ИСПРАВЛЕНИЕ ДУБЛИРОВАНИЯ: УДАЛЯЕМ СТАРОЕ СООБЩЕНИЕ И ОТПРАВЛЯЕМ НОВОЕ
         safe_delete_message(chat_id, message_id)
         bot.send_message(
             chat_id, 
@@ -247,7 +254,6 @@ def callback_inline(call):
 
     # --- ЛИЧНЫЙ КАБИНЕТ ---
     elif call.data == 'my_account':
-        # ... (логика личного кабинета) ...
         balance = 155
         referral_link = f"https://t.me/avitoup1_bot?start={chat_id}" 
         referrals_count = 0
@@ -280,9 +286,60 @@ def callback_inline(call):
                 reply_markup=get_account_markup(),
                 parse_mode='Markdown'
             )
+
+    # --- ДЕЙСТВИЯ ВНУТРИ ЛИЧНОГО КАБИНЕТА ---
+    elif call.data.startswith('account_'):
+        account_key = call.data.replace('account_', '')
         
+        if account_key == 'deposit':
+            # *** ИЗМЕНЕННЫЙ ТЕКСТ ПОД СКРИНШОТ ***
+            response_text = (
+                "Введите сумму пополнения на баланс\n\n"
+                "❗️ Минимальная сумма пополнения - \n"
+                "400 ₽"
+            )
+        
+        elif account_key == 'orders':
+            response_text = (
+                "📖 *Мои заказы*\n\n"
+                "Здесь будет отображаться информация о ваших активных и выполненных "
+                "заказах. Пока история пуста. \n"
+                "Вы можете [заказать ПФ сейчас](/order_pf)."
+            )
+            
+        elif account_key == 'partner':
+            referral_link = f"https://t.me/avitoup1_bot?start={chat_id}"
+            response_text = (
+                "🤝 *Партнерская программа*\n\n"
+                "Приглашайте друзей и партнеров и получайте *10%* от их пополнений "
+                "на свой баланс!\n\n"
+                f"Ваша реферальная ссылка: `{referral_link}`"
+            )
+        
+        else:
+            response_text = f"Ошибка: Неизвестный раздел Личного кабинета: {account_key}"
+
+        # Редактируем сообщение для показа ответа
+        try:
+            bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=response_text,
+                reply_markup=get_back_to_account_markup(),
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            safe_delete_message(chat_id, message_id)
+            bot.send_message(
+                chat_id, 
+                response_text, 
+                reply_markup=get_back_to_account_markup(),
+                parse_mode='Markdown'
+            )
+
+
     # --- ДРУГИЕ КНОПКИ БЕЗ ФУНКЦИОНАЛА ---
-    elif call.data in ['promocodes', 'strategy', 'account_deposit', 'account_orders', 'account_partner']:
+    elif call.data in ['promocodes', 'strategy']:
         back_markup = get_main_menu_markup() 
         
         try:
