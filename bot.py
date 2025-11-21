@@ -21,6 +21,7 @@ def safe_delete_message(chat_id, message_id):
         pass # Игнорируем ошибку удаления
 
 # --- ФУНКЦИИ ДЛЯ КЛАВИАТУР ---
+# (Функции get_..._markup без изменений)
 
 def get_main_menu_markup():
     """Создает Inline Keyboard для главного меню."""
@@ -162,7 +163,8 @@ def start(m):
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call):
-    bot.answer_callback_query(call.id)
+    # Обязательно отвечаем на колбэк, чтобы кнопка перестала "крутиться"
+    bot.answer_callback_query(call.id) 
     chat_id = call.message.chat.id
     message_id = call.message.message_id
     
@@ -175,61 +177,61 @@ def callback_inline(call):
         
     # --- ГЛАВНОЕ МЕНЮ: FAQ / КЕЙСЫ ---
     elif call.data == 'faq':
-        safe_delete_message(chat_id, message_id)
+        # При возврате в меню FAQ мы ДОЛЖНЫ использовать edit_message_text,
+        # если сообщение - это Inline-сообщение (как в случае с ответом на faq_key)
+        try:
+            bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text="Вопросы и ответы", 
+                reply_markup=get_faq_markup()
+            )
+        except Exception:
+            # Если это сообщение уже удалено или слишком старое, отправляем новое
+            bot.send_message(chat_id, "Вопросы и ответы", reply_markup=get_faq_markup())
             
-        bot.send_message(
-            chat_id, 
-            "Вопросы и ответы", 
-            reply_markup=get_faq_markup()
-        )
-        
     # --- ДЕЙСТВИЯ ВНУТРИ FAQ ---
     elif call.data.startswith('faq_'):
-        # ИСПРАВЛЕНИЕ: Используем replace для получения полного ключа (pf_how, x_fail)
         faq_key = call.data.replace('faq_', '')
         
-        safe_delete_message(chat_id, message_id)
+        # --- Текст ответа ---
+        pf_how_text = (
+            "*Как поведенческие факторы помогают продвинуть объявление в топ:*\n\n"
+            "**Ctr объявлений поднимается** и ещё лучше Авито начинает продвигать "
+            "объявление так как видит, что много людей интересуются, создают "
+            "активность на объявление, просматривают номер телефона, "
+            "добавляют в избранное"
+        )
         
+        # --- Определяем текст в зависимости от faq_key ---
         if faq_key == 'pf_how':
-            # --- РЕАЛИЗАЦИЯ ОТВЕТА НА ВОПРОС О ПФ ---
-            pf_how_text = (
-                "*Как поведенческие факторы помогают продвинуть объявление в топ:*\n\n"
-                "**Ctr объявлений поднимается** и ещё лучше Авито начинает продвигать "
-                "объявление так как видит, что много людей интересуются, создают "
-                "активность на объявление, просматривают номер телефона, "
-                "добавляют в избранное"
-            )
-            bot.send_message(
-                chat_id, 
-                pf_how_text, 
-                reply_markup=get_back_to_faq_markup(),
-                parse_mode='Markdown'
-            )
-            
+            response_text = pf_how_text
         elif faq_key == 'cases':
-            # TODO: Заменить на реальный контент
-            bot.send_message(
-                chat_id, 
-                "Вот наши лучшие **кейсы и отзывы**: [ссылка на канал/текст]", 
-                reply_markup=get_back_to_faq_markup(),
-                parse_mode='Markdown'
-            )
+            response_text = "Вот наши лучшие **кейсы и отзывы**: [ссылка на канал/текст]"
         elif faq_key == 'x_fail':
-            # Здесь будет ответ на вопрос "Иксы на авито не работают"
-            bot.send_message(
-                chat_id, 
-                f"Вы выбрали тему: **Иксы на авито не работают** (здесь будет подробный ответ).", 
+            response_text = "Вы выбрали тему: **Иксы на авито не работают** (здесь будет подробный ответ)."
+        else: # faq_intro и другие
+            response_text = f"Вы выбрали тему: **{faq_key}** (здесь будет подробный ответ)."
+
+        # --- ИСПОЛЬЗУЕМ EDIT_MESSAGE_TEXT ДЛЯ FAQ ---
+        try:
+            bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=response_text,
                 reply_markup=get_back_to_faq_markup(),
                 parse_mode='Markdown'
             )
-        else: # Сработает для faq_intro и любых других, не реализованных
+        except Exception as e:
+            # Если edit не сработал (например, сообщение слишком старое), отправляем новое
+            print(f"Error editing message: {e}")
             bot.send_message(
                 chat_id, 
-                f"Вы выбрали тему: **{faq_key}** (здесь будет подробный ответ).", 
+                response_text, 
                 reply_markup=get_back_to_faq_markup(),
                 parse_mode='Markdown'
             )
-            
+
     # --- ЛИЧНЫЙ КАБИНЕТ ---
     elif call.data == 'my_account':
         # ... (данные без изменений) ...
@@ -261,7 +263,7 @@ def callback_inline(call):
         safe_delete_message(chat_id, message_id)
         bot.send_message(chat_id, f"Вы нажали кнопку: {call.data}. Здесь будет соответствующая логика.")
 
-    # --- ЗАКАЗ ПФ: ЛОГИКА ---
+    # --- ЗАКАЗ ПФ: ЛОГИКА (ОСТАВЛЕНО С safe_delete_message для чистой навигации) ---
     elif call.data == 'order_pf':
         safe_delete_message(chat_id, message_id)
         bot.send_message(
