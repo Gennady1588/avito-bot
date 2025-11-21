@@ -21,7 +21,6 @@ def safe_delete_message(chat_id, message_id):
         pass # Игнорируем ошибку удаления
 
 # --- ФУНКЦИИ ДЛЯ КЛАВИАТУР ---
-# ... (Остальные функции get_..._markup без изменений) ...
 
 def get_main_menu_markup():
     """Создает Inline Keyboard для главного меню."""
@@ -169,14 +168,13 @@ def callback_inline(call):
     
     # --- НАВИГАЦИЯ НАЗАД К ГЛАВНОМУ МЕНЮ ---
     if call.data == 'back_to_main_menu':
-        safe_delete_message(chat_id, message_id) # Безопасное удаление
+        safe_delete_message(chat_id, message_id)
         
     elif call.data == 'start_again':
         start(call.message)
         
     # --- ГЛАВНОЕ МЕНЮ: FAQ / КЕЙСЫ ---
     elif call.data == 'faq':
-        # Удаляем предыдущее сообщение, если оно не было удалено
         safe_delete_message(chat_id, message_id)
             
         bot.send_message(
@@ -189,7 +187,7 @@ def callback_inline(call):
     elif call.data.startswith('faq_'):
         faq_key = call.data.split('_')[1]
         
-        safe_delete_message(chat_id, message_id) # Безопасное удаление меню FAQ
+        safe_delete_message(chat_id, message_id)
         
         if faq_key == 'pf_how':
             # --- РЕАЛИЗАЦИЯ ОТВЕТА НА ВОПРОС О ПФ ---
@@ -215,8 +213,15 @@ def callback_inline(call):
                 reply_markup=get_back_to_faq_markup(),
                 parse_mode='Markdown'
             )
-        else:
-            # Заглушка для остальных вопросов
+        elif faq_key == 'x_fail':
+            # Здесь будет ответ на вопрос "Иксы на авито не работают"
+            bot.send_message(
+                chat_id, 
+                f"Вы выбрали тему: **{faq_key}** (здесь будет подробный ответ).", 
+                reply_markup=get_back_to_faq_markup(),
+                parse_mode='Markdown'
+            )
+        else: # Сработает для faq_intro и любых других, не реализованных
             bot.send_message(
                 chat_id, 
                 f"Вы выбрали тему: **{faq_key}** (здесь будет подробный ответ).", 
@@ -242,7 +247,7 @@ def callback_inline(call):
             "Связь с создателем @inkarmedia"
         )
         
-        safe_delete_message(chat_id, message_id) # Безопасное удаление
+        safe_delete_message(chat_id, message_id)
         bot.send_message(
             chat_id, 
             account_text, 
@@ -252,12 +257,12 @@ def callback_inline(call):
         
     # --- ДРУГИЕ КНОПКИ БЕЗ ФУНКЦИОНАЛА ---
     elif call.data in ['promocodes', 'strategy', 'account_deposit', 'account_orders', 'account_partner']:
-        safe_delete_message(chat_id, message_id) # Безопасное удаление
+        safe_delete_message(chat_id, message_id)
         bot.send_message(chat_id, f"Вы нажали кнопку: {call.data}. Здесь будет соответствующая логика.")
 
     # --- ЗАКАЗ ПФ: ЛОГИКА ---
     elif call.data == 'order_pf':
-        safe_delete_message(chat_id, message_id) # Безопасное удаление
+        safe_delete_message(chat_id, message_id)
         bot.send_message(
             chat_id, 
             "Выберите вариант:", 
@@ -268,7 +273,7 @@ def callback_inline(call):
         duration_key = call.data.split('_')[1] 
         user_data[chat_id]['duration'] = duration_key
         
-        safe_delete_message(chat_id, message_id) # Безопасное удаление
+        safe_delete_message(chat_id, message_id)
         bot.send_message(
             chat_id, 
             "Выберите количество ПФ в день:", 
@@ -279,7 +284,7 @@ def callback_inline(call):
         pf_count = call.data.split('_')[2] 
         user_data[chat_id]['pf_count'] = pf_count
         
-        safe_delete_message(chat_id, message_id) # Безопасное удаление
+        safe_delete_message(chat_id, message_id)
         
         final_text = (
             "Если вы будете запускать на несколько \n"
@@ -300,7 +305,7 @@ def callback_inline(call):
         
     # --- НАВИГАЦИЯ НАЗАД В ПРОЦЕССЕ ЗАКАЗА ---
     elif call.data == 'back_to_duration':
-        safe_delete_message(chat_id, message_id) # Безопасное удаление
+        safe_delete_message(chat_id, message_id)
         bot.send_message(
             chat_id, 
             "Выберите вариант:", 
@@ -308,7 +313,7 @@ def callback_inline(call):
         )
         
     elif call.data == 'back_to_pf_count':
-        safe_delete_message(chat_id, message_id) # Безопасное удаление
+        safe_delete_message(chat_id, message_id)
         bot.send_message(
             chat_id, 
             "Выберите количество ПФ в день:", 
