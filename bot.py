@@ -21,7 +21,6 @@ def safe_delete_message(chat_id, message_id):
         pass # Игнорируем ошибку удаления
 
 # --- ФУНКЦИИ ДЛЯ КЛАВИАТУР ---
-# (Функции get_..._markup без изменений)
 
 def get_main_menu_markup():
     """Создает Inline Keyboard для главного меню."""
@@ -121,7 +120,7 @@ def get_faq_markup():
     )
     
     markup.row(
-        telebot.types.InlineKeyboardButton(text='Кейсы и отзывы', callback_data='faq_cases')
+        telebot.types.InlineKeyboardButton(text='Кейсы и отзывы', url='https://t.me/Avitounlock/20') # <--- ИСПРАВЛЕНО
     )
     
     markup.row(
@@ -163,7 +162,6 @@ def start(m):
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call):
-    # Обязательно отвечаем на колбэк, чтобы кнопка перестала "крутиться"
     bot.answer_callback_query(call.id) 
     chat_id = call.message.chat.id
     message_id = call.message.message_id
@@ -177,8 +175,6 @@ def callback_inline(call):
         
     # --- ГЛАВНОЕ МЕНЮ: FAQ / КЕЙСЫ ---
     elif call.data == 'faq':
-        # При возврате в меню FAQ мы ДОЛЖНЫ использовать edit_message_text,
-        # если сообщение - это Inline-сообщение (как в случае с ответом на faq_key)
         try:
             bot.edit_message_text(
                 chat_id=chat_id,
@@ -187,14 +183,13 @@ def callback_inline(call):
                 reply_markup=get_faq_markup()
             )
         except Exception:
-            # Если это сообщение уже удалено или слишком старое, отправляем новое
             bot.send_message(chat_id, "Вопросы и ответы", reply_markup=get_faq_markup())
             
     # --- ДЕЙСТВИЯ ВНУТРИ FAQ ---
     elif call.data.startswith('faq_'):
         faq_key = call.data.replace('faq_', '')
         
-        # --- Текст ответа ---
+        # --- Тексты ответов ---
         pf_how_text = (
             "*Как поведенческие факторы помогают продвинуть объявление в топ:*\n\n"
             "**Ctr объявлений поднимается** и ещё лучше Авито начинает продвигать "
@@ -203,17 +198,30 @@ def callback_inline(call):
             "добавляют в избранное"
         )
         
+        x_fail_text = (
+            "*Лучший способ использования иксов – это совмещать их с ПФ*\n\n"
+            "Условно делаем 7 дней ПФ по 50 штук, далее авито решает, что ваши "
+            "средние просмотры = **50**.\n\n"
+            "Подключаем х10 и авито всеми силами пытается оправдать название «Х10» "
+            "и сделать вам **500 просмотров**, а именно забрасывает в топ, "
+            "показывает везде в рекомендациях и на главной странице.\n\n"
+            "Поэтому иксы **очень эффективно использовать вместе с ПФ**.\n\n"
+            "‼️ *Помним, что кнопки «бабло» не существует, нужно тестировать стратегии.*"
+        )
+        
         # --- Определяем текст в зависимости от faq_key ---
         if faq_key == 'pf_how':
             response_text = pf_how_text
-        elif faq_key == 'cases':
-            response_text = "Вот наши лучшие **кейсы и отзывы**: [ссылка на канал/текст]"
         elif faq_key == 'x_fail':
-            response_text = "Вы выбрали тему: **Иксы на авито не работают** (здесь будет подробный ответ)."
+            response_text = x_fail_text
+        elif faq_key == 'cases':
+             # Эта секция не должна срабатывать, так как кнопка 'cases' теперь url,
+             # но мы оставляем заглушку на случай прямого вызова.
+            response_text = "Вы выбрали тему: **Кейсы и отзывы** (эта кнопка теперь ведет на внешний канал)."
         else: # faq_intro и другие
             response_text = f"Вы выбрали тему: **{faq_key}** (здесь будет подробный ответ)."
 
-        # --- ИСПОЛЬЗУЕМ EDIT_MESSAGE_TEXT ДЛЯ FAQ ---
+        # ИСПОЛЬЗУЕМ EDIT_MESSAGE_TEXT
         try:
             bot.edit_message_text(
                 chat_id=chat_id,
@@ -223,8 +231,6 @@ def callback_inline(call):
                 parse_mode='Markdown'
             )
         except Exception as e:
-            # Если edit не сработал (например, сообщение слишком старое), отправляем новое
-            print(f"Error editing message: {e}")
             bot.send_message(
                 chat_id, 
                 response_text, 
@@ -263,7 +269,7 @@ def callback_inline(call):
         safe_delete_message(chat_id, message_id)
         bot.send_message(chat_id, f"Вы нажали кнопку: {call.data}. Здесь будет соответствующая логика.")
 
-    # --- ЗАКАЗ ПФ: ЛОГИКА (ОСТАВЛЕНО С safe_delete_message для чистой навигации) ---
+    # --- ЗАКАЗ ПФ: ЛОГИКА ---
     elif call.data == 'order_pf':
         safe_delete_message(chat_id, message_id)
         bot.send_message(
