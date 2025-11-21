@@ -185,7 +185,8 @@ def callback_inline(call):
         
     # --- ДЕЙСТВИЯ ВНУТРИ FAQ ---
     elif call.data.startswith('faq_'):
-        faq_key = call.data.split('_')[1]
+        # ИСПРАВЛЕНИЕ: Используем replace для получения полного ключа (pf_how, x_fail)
+        faq_key = call.data.replace('faq_', '')
         
         safe_delete_message(chat_id, message_id)
         
@@ -217,7 +218,7 @@ def callback_inline(call):
             # Здесь будет ответ на вопрос "Иксы на авито не работают"
             bot.send_message(
                 chat_id, 
-                f"Вы выбрали тему: **{faq_key}** (здесь будет подробный ответ).", 
+                f"Вы выбрали тему: **Иксы на авито не работают** (здесь будет подробный ответ).", 
                 reply_markup=get_back_to_faq_markup(),
                 parse_mode='Markdown'
             )
