@@ -26,7 +26,8 @@ def get_main_menu_markup():
     markup.row(
         # TODO: Заменить заглушки на реальные URL-адреса
         telebot.types.InlineKeyboardButton(text='📗 Правила пользования', url='https://your-rules.com'),
-        telebot.types.InlineKeyboardButton(text='🧑‍💻 Тех поддержка', url='https://t.me/your_manager')
+        # ОБНОВЛЕННАЯ ССЫЛКА НА ТЕХ ПОДДЕРЖКУ
+        telebot.types.InlineKeyboardButton(text='🧑‍💻 Тех поддержка', url='https://t.me/Avitounlock') 
     )
     markup.row(
         telebot.types.InlineKeyboardButton(text='💬 FAQ / Кейсы', callback_data='faq'),
@@ -316,5 +317,6 @@ def webhook():
 
 if __name__ == '__main__':
     bot.remove_webhook()
+    # Убедитесь, что 'RENDER_EXTERNAL_HOSTNAME' задана в настройках хостинга
     bot.set_webhook(url=f"https://{os.environ['RENDER_EXTERNAL_HOSTNAME']}/{TOKEN}")
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
