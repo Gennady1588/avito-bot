@@ -2,7 +2,7 @@ from flask import Flask, request
 import telebot
 import os
 
-app = Flask(__name__)
+app = Flask(__flask__)
 
 # --- КОНФИГУРАЦИЯ ---
 TOKEN = os.environ['TOKEN']
@@ -26,28 +26,34 @@ def get_main_menu_markup():
     """Создает Inline Keyboard для главного меню."""
     markup = telebot.types.InlineKeyboardMarkup()
     
+    # Ряд 1: Основной функционал
     markup.row(
         telebot.types.InlineKeyboardButton(text='🚀 Заказать ПФ', callback_data='order_pf'),
         telebot.types.InlineKeyboardButton(text='🚪 Личный кабинет', callback_data='my_account')
     )
-    markup.row(
-        telebot.types.InlineKeyboardButton(text='📗 Правила пользования', url='https://your-rules.com'),
-        telebot.types.InlineKeyboardButton(text='🧑‍💻 Тех поддержка', url='https://t.me/Avitounlock') 
-    )
+    
+    # Ряд 2: Информация
     markup.row(
         telebot.types.InlineKeyboardButton(text='💬 FAQ / Кейсы', callback_data='faq'),
         telebot.types.InlineKeyboardButton(text='🎁 Промокоды', callback_data='promocodes')
     )
+    
+    # Ряд 3: Поддержка и Правила
+    markup.row(
+        telebot.types.InlineKeyboardButton(text='📗 Правила пользования', url='https://your-rules.com'),
+        telebot.types.InlineKeyboardButton(text='🧑‍💻 Тех поддержка', url='https://t.me/Avitounlock') 
+    )
+    
+    # Ряд 4: Стратегия (оставлена в отдельном ряду, так как длинная)
     markup.row(
         telebot.types.InlineKeyboardButton(text='Подбор стратегии', callback_data='strategy')
     )
+    
+    # Ряд 5: Ссылка на бан (убраны "➖" и "➡️ /start")
     markup.row(
-        telebot.types.InlineKeyboardButton(text='➖', callback_data='_divider')
+        telebot.types.InlineKeyboardButton(text='Есть ли на Авито бан за ПФ!?', url='https://t.me/Avitounlock/19')
     )
-    markup.row(
-        telebot.types.InlineKeyboardButton(text='Есть ли на Авито бан за ПФ!?', url='https://t.me/Avitounlock/19'),
-        telebot.types.InlineKeyboardButton(text='➡️ /start', callback_data='start_again')
-    )
+    
     return markup
 
 def get_duration_markup():
@@ -160,10 +166,10 @@ def start(m):
     if user_id not in user_data:
         user_data[user_id] = {}
     
-    # 1. Удаляем команду /start
+    # 1. Удаляем команду /start для чистоты
     safe_delete_message(user_id, m.message_id) 
 
-    # Текст из скриншотов
+    # Текст Главного меню
     message_text = (
         "📈 *ПФ на Авито* бот\n\n"
         "позицию в результатах поиска. чем больше ПФ, тем выше ваше объявление в "
@@ -220,7 +226,7 @@ def callback_inline(call):
                 parse_mode='Markdown'
             )
         except Exception:
-             # Если edit не удался (например, сообщение слишком старое), удаляем и отправляем новое
+             # Если edit не удался, удаляем и отправляем новое
             safe_delete_message(chat_id, message_id)
             bot.send_message(
                 chat_id, 
