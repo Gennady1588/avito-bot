@@ -2,7 +2,7 @@ from flask import Flask, request
 import telebot
 import os
 
-app = Flask(__flask__)
+app = Flask(__name__)
 
 # --- КОНФИГУРАЦИЯ ---
 TOKEN = os.environ['TOKEN']
@@ -242,13 +242,23 @@ def callback_inline(call):
         
     # --- ГЛАВНОЕ МЕНЮ: FAQ / КЕЙСЫ ---
     elif call.data == 'faq':
-        # УДАЛЯЕМ СТАРОЕ СООБЩЕНИЕ И ОТПРАВЛЯЕМ НОВОЕ ДЛЯ ЧИСТОТЫ ДИАЛОГА
-        safe_delete_message(chat_id, message_id)
-        bot.send_message(
-            chat_id, 
-            "Выберите интересующий Вас раздел:", 
-            reply_markup=get_faq_markup()
-        )
+        # *ВСЕГДА* редактируем текущее сообщение для показа меню FAQ
+        faq_menu_text = "Выберите интересующий Вас раздел:"
+        try:
+            bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=faq_menu_text, 
+                reply_markup=get_faq_markup()
+            )
+        except Exception:
+            # Если не удалось отредактировать, удаляем и отправляем новое
+            safe_delete_message(chat_id, message_id)
+            bot.send_message(
+                chat_id, 
+                faq_menu_text, 
+                reply_markup=get_faq_markup()
+            )
             
     # --- ДЕЙСТВИЯ ВНУТРИ FAQ ---
     elif call.data.startswith('faq_'):
@@ -433,33 +443,50 @@ def callback_inline(call):
 
     # --- ЗАКАЗ ПФ: ЛОГИКА ---
     elif call.data == 'order_pf':
-        # УДАЛЯЕМ СТАРОЕ СООБЩЕНИЕ И ОТПРАВЛЯЕМ НОВОЕ ДЛЯ ЧИСТОТЫ ДИАЛОГА
-        safe_delete_message(chat_id, message_id)
-        bot.send_message(
-            chat_id, 
-            "Выберите вариант:", 
-            reply_markup=get_duration_markup()
-        )
+        # *ВСЕГДА* редактируем текущее сообщение для показа меню
+        order_text = "Выберите вариант:"
+        try:
+            bot.edit_message_text(
+                chat_id=chat_id, 
+                message_id=message_id, 
+                text=order_text, 
+                reply_markup=get_duration_markup()
+            )
+        except Exception:
+             # Если edit не удался, удаляем и отправляем новое
+            safe_delete_message(chat_id, message_id)
+            bot.send_message(
+                chat_id, 
+                order_text, 
+                reply_markup=get_duration_markup()
+            )
         
     elif call.data.startswith('duration_'):
         duration_key = call.data.split('_')[1] 
         user_data[chat_id]['duration'] = duration_key
         
-        # УДАЛЯЕМ СТАРОЕ СООБЩЕНИЕ И ОТПРАВЛЯЕМ НОВОЕ ДЛЯ ЧИСТОТЫ ДИАЛОГА
-        safe_delete_message(chat_id, message_id)
-        bot.send_message(
-            chat_id, 
-            "Выберите количество ПФ в день:", 
-            reply_markup=get_pf_count_markup()
-        )
+        # Редактируем текущее сообщение
+        duration_text = "Выберите количество ПФ в день:"
+        try:
+            bot.edit_message_text(
+                chat_id=chat_id, 
+                message_id=message_id, 
+                text=duration_text, 
+                reply_markup=get_pf_count_markup()
+            )
+        except Exception:
+            safe_delete_message(chat_id, message_id)
+            bot.send_message(
+                chat_id, 
+                duration_text, 
+                reply_markup=get_pf_count_markup()
+            )
 
     elif call.data.startswith('pf_count_'):
         pf_count = call.data.split('_')[2] 
         user_data[chat_id]['pf_count'] = pf_count
         
-        # УДАЛЯЕМ СТАРОЕ СООБЩЕНИЕ И ОТПРАВЛЯЕМ НОВОЕ ДЛЯ ЧИСТОТЫ ДИАЛОГА
-        safe_delete_message(chat_id, message_id)
-        
+        # Редактируем текущее сообщение
         final_text = (
             "Если вы будете запускать на несколько \n"
             "объявлений - КАЖДАЯ ССЫЛКА С \n"
@@ -470,31 +497,58 @@ def callback_inline(call):
         final_markup.row(
             telebot.types.InlineKeyboardButton(text='Назад', callback_data='back_to_pf_count')
         )
-        
-        bot.send_message(
-            chat_id, 
-            final_text, 
-            reply_markup=final_markup
-        )
-        
+
+        try:
+            bot.edit_message_text(
+                chat_id=chat_id, 
+                message_id=message_id, 
+                text=final_text, 
+                reply_markup=final_markup
+            )
+        except Exception:
+            safe_delete_message(chat_id, message_id)
+            bot.send_message(
+                chat_id, 
+                final_text, 
+                reply_markup=final_markup
+            )
+
     # --- НАВИГАЦИЯ НАЗАД В ПРОЦЕССЕ ЗАКАЗА ---
     elif call.data == 'back_to_duration':
-        # УДАЛЯЕМ СТАРОЕ СООБЩЕНИЕ И ОТПРАВЛЯЕМ НОВОЕ ДЛЯ ЧИСТОТЫ ДИАЛОГА
-        safe_delete_message(chat_id, message_id)
-        bot.send_message(
-            chat_id, 
-            "Выберите вариант:", 
-            reply_markup=get_duration_markup()
-        )
+        # Редактируем текущее сообщение
+        duration_text = "Выберите вариант:"
+        try:
+            bot.edit_message_text(
+                chat_id=chat_id, 
+                message_id=message_id, 
+                text=duration_text, 
+                reply_markup=get_duration_markup()
+            )
+        except Exception:
+            safe_delete_message(chat_id, message_id)
+            bot.send_message(
+                chat_id, 
+                duration_text, 
+                reply_markup=get_duration_markup()
+            )
         
     elif call.data == 'back_to_pf_count':
-        # УДАЛЯЕМ СТАРОЕ СООБЩЕНИЕ И ОТПРАВЛЯЕМ НОВОЕ ДЛЯ ЧИСТОТЫ ДИАЛОГА
-        safe_delete_message(chat_id, message_id)
-        bot.send_message(
-            chat_id, 
-            "Выберите количество ПФ в день:", 
-            reply_markup=get_pf_count_markup()
-        )
+        # Редактируем текущее сообщение
+        pf_count_text = "Выберите количество ПФ в день:"
+        try:
+            bot.edit_message_text(
+                chat_id=chat_id, 
+                message_id=message_id, 
+                text=pf_count_text, 
+                reply_markup=get_pf_count_markup()
+            )
+        except Exception:
+            safe_delete_message(chat_id, message_id)
+            bot.send_message(
+                chat_id, 
+                pf_count_text, 
+                reply_markup=get_pf_count_markup()
+            )
 
 
 # --- ОБРАБОТЧИК СООБЩЕНИЙ КЛИЕНТОВ ---
