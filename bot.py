@@ -44,12 +44,12 @@ def get_main_menu_markup():
         telebot.types.InlineKeyboardButton(text='🧑‍💻 Тех поддержка', url='https://t.me/Avitounlock') 
     )
     
-    # Ряд 4: Стратегия (оставлена в отдельном ряду, так как длинная)
+    # Ряд 4: Стратегия (Теперь прямая ссылка на @Hiluxe56)
     markup.row(
-        telebot.types.InlineKeyboardButton(text='Подбор стратегии', callback_data='strategy')
+        telebot.types.InlineKeyboardButton(text='Подбор стратегии', url='https://t.me/Hiluxe56')
     )
     
-    # Ряд 5: Ссылка на бан (убраны "➖" и "➡️ /start")
+    # Ряд 5: Ссылка на бан
     markup.row(
         telebot.types.InlineKeyboardButton(text='Есть ли на Авито бан за ПФ!?', url='https://t.me/Avitounlock/19')
     )
@@ -158,6 +158,89 @@ def get_back_to_main_markup():
     )
     return markup
 
+# --- ФУНКЦИИ ОБРАБОТКИ ЗАКАЗА ---
+
+def request_links(message):
+    """Функция, которая вызывается после выбора количества ПФ, чтобы запросить ссылки."""
+    chat_id = message.chat.id
+    
+    final_text = (
+        "🔗 *Отправьте ссылки*\n\n"
+        "Пожалуйста, вставьте ссылки на ваши объявления с новой строки. "
+        "Каждая ссылка должна быть на отдельной строке (`CTRL+ENTER`).\n\n"
+        "Мы ждем ваш список ссылок..."
+    )
+    
+    # Отправляем сообщение и регистрируем следующий шаг для получения ссылок
+    sent_msg = bot.send_message(
+        chat_id, 
+        final_text, 
+        parse_mode='Markdown'
+    )
+    
+    # Сохраняем ID сообщения, которое нужно будет удалить при получении ссылок
+    user_data[chat_id]['awaiting_links_msg_id'] = sent_msg.message_id
+    
+    bot.register_next_step_handler(sent_msg, process_links_and_send_order)
+
+
+def process_links_and_send_order(message):
+    """Обрабатывает полученные ссылки и отправляет заказ администратору."""
+    chat_id = message.chat.id
+    links = message.text
+    
+    # 1. Удаляем сообщение с инструкцией по вводу ссылок (для чистоты)
+    if 'awaiting_links_msg_id' in user_data.get(chat_id, {}):
+        safe_delete_message(chat_id, user_data[chat_id]['awaiting_links_msg_id'])
+        del user_data[chat_id]['awaiting_links_msg_id']
+    
+    # 2. Собираем данные заказа
+    duration_map = {'1d': '1 День', '2d': '2 Дня', '3d': '3 Дня', '5d': '5 Дней', '7d': '7 Дней', '30d': 'Месяц'}
+    duration_key = user_data[chat_id].get('duration', 'N/A')
+    duration_text = duration_map.get(duration_key, f'Неизвестно ({duration_key})')
+    pf_count = user_data[chat_id].get('pf_count', 'N/A')
+    
+    order_summary_for_admin = (
+        "🔥 *НОВЫЙ ЗАКАЗ ПФ* 🔥\n\n"
+        f"Пользователь: @{message.from_user.username or 'без_юзернейма'} (ID: `{chat_id}`)\n"
+        f"Продолжительность: *{duration_text}*\n"
+        f"Количество ПФ в день: *{pf_count}*\n"
+        "--- ССЫЛКИ НА ОБЪЯВЛЕНИЯ ---\n"
+        f"{links}\n"
+        "------------------------------\n"
+        "Для ответа клиенту используйте реплай на это сообщение."
+    )
+    
+    # 3. Отправляем заказ администратору
+    bot.send_message(
+        OWNER_ID, 
+        order_summary_for_admin, 
+        parse_mode='Markdown'
+    )
+    
+    # 4. Отправляем подтверждение клиенту
+    confirmation_text = (
+        "✅ *Заказ принят в обработку!*\n\n"
+        "Ваш заказ (длительность: **{}**, ПФ/день: **{}**) передан менеджеру. "
+        "Ожидайте ответ в ближайшее время."
+    ).format(duration_text, pf_count)
+    
+    # Удаляем сообщение с введенными ссылками для чистоты
+    safe_delete_message(chat_id, message.message_id)
+    
+    # Отправляем подтверждение и возвращаем главное меню
+    bot.send_message(
+        chat_id, 
+        confirmation_text,
+        reply_markup=get_main_menu_markup(),
+        parse_mode='Markdown'
+    )
+    
+    # Очищаем данные заказа из памяти
+    user_data[chat_id]['duration'] = None
+    user_data[chat_id]['pf_count'] = None
+
+
 # --- ОСНОВНЫЕ ОБРАБОТЧИКИ ---
 
 @bot.message_handler(commands=['start'])
@@ -235,14 +318,8 @@ def callback_inline(call):
                 parse_mode='Markdown'
             )
         
-    elif call.data == 'start_again':
-        # Принудительная очистка, затем отправка нового меню
-        safe_delete_message(chat_id, message_id)
-        start(call.message)
-        
     # --- ГЛАВНОЕ МЕНЮ: FAQ / КЕЙСЫ ---
     elif call.data == 'faq':
-        # *ВСЕГДА* редактируем текущее сообщение для показа меню FAQ
         faq_menu_text = "Выберите интересующий Вас раздел:"
         try:
             bot.edit_message_text(
@@ -252,7 +329,6 @@ def callback_inline(call):
                 reply_markup=get_faq_markup()
             )
         except Exception:
-            # Если не удалось отредактировать, удаляем и отправляем новое
             safe_delete_message(chat_id, message_id)
             bot.send_message(
                 chat_id, 
@@ -291,7 +367,6 @@ def callback_inline(call):
         else: 
             response_text = f"Ошибка: Неизвестный ключ FAQ: {faq_key}"
 
-        # ИСПОЛЬЗУЕМ EDIT_MESSAGE_TEXT
         try:
             bot.edit_message_text(
                 chat_id=chat_id,
@@ -301,7 +376,6 @@ def callback_inline(call):
                 parse_mode='Markdown'
             )
         except Exception as e:
-            # Если edit не удался, удаляем и отправляем новое
             safe_delete_message(chat_id, message_id)
             bot.send_message(
                 chat_id, 
@@ -327,7 +401,6 @@ def callback_inline(call):
             "Связь с создателем @inkarmedia"
         )
         
-        # Используем edit_message_text для навигации из главного меню
         try:
             bot.edit_message_text(
                 chat_id=chat_id,
@@ -337,7 +410,6 @@ def callback_inline(call):
                 parse_mode='Markdown'
             )
         except Exception:
-            # Если edit не удался, удаляем и отправляем новое
             safe_delete_message(chat_id, message_id)
             bot.send_message(
                 chat_id, 
@@ -360,234 +432,3 @@ def callback_inline(call):
         elif account_key == 'orders':
             response_text = (
                 "📖 *Мои заказы*\n\n"
-                "Здесь будет отображаться информация о ваших активных и выполненных "
-                "заказах. Пока история пуста. \n"
-                "Вы можете [заказать ПФ сейчас](/order_pf)."
-            )
-            
-        elif account_key == 'partner':
-            referral_link = f"https://t.me/avitoup1_bot?start={chat_id}"
-            response_text = (
-                "🤝 *Партнерская программа*\n\n"
-                "Приглашайте друзей и партнеров и получайте *10%* от их пополнений "
-                "на свой баланс!\n\n"
-                f"Ваша реферальная ссылка: `{referral_link}`"
-            )
-        
-        else:
-            response_text = f"Ошибка: Неизвестный раздел Личного кабинета: {account_key}"
-
-        # Редактируем сообщение для показа ответа
-        try:
-            bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=message_id,
-                text=response_text,
-                reply_markup=get_back_to_account_markup(),
-                parse_mode='Markdown'
-            )
-        except Exception as e:
-            # Если edit не удался, удаляем и отправляем новое
-            safe_delete_message(chat_id, message_id)
-            bot.send_message(
-                chat_id, 
-                response_text, 
-                reply_markup=get_back_to_account_markup(),
-                parse_mode='Markdown'
-            )
-
-
-    # --- ГЛАВНОЕ МЕНЮ: ПРОМОКОДЫ ---
-    elif call.data == 'promocodes':
-        response_text = (
-            "🎁 *Промокоды*\n\n"
-            "Промокоды на скидку регулярно публикуются в нашем основном "
-            "канале - [@avitoup_official]. Не пропустите, чтобы сэкономить!"
-        )
-
-        try:
-            bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=message_id,
-                text=response_text,
-                reply_markup=get_back_to_main_markup(),
-                parse_mode='Markdown'
-            )
-        except Exception:
-            safe_delete_message(chat_id, message_id)
-            bot.send_message(chat_id, response_text, reply_markup=get_back_to_main_markup(), parse_mode='Markdown')
-
-
-    # --- ГЛАВНОЕ МЕНЮ: ПОДБОР СТРАТЕГИИ ---
-    elif call.data == 'strategy':
-        response_text = (
-            "📈 *Подбор стратегии*\n\n"
-            "Не уверены, какой вариант подойдет именно вам? \n"
-            "Обратитесь к нашему менеджеру для бесплатной консультации и подбора "
-            "индивидуальной стратегии продвижения на Авито:\n"
-            "🧑‍💻 [Тех поддержка](https://t.me/Avitounlock)"
-        )
-
-        try:
-            bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=message_id,
-                text=response_text,
-                reply_markup=get_back_to_main_markup(),
-                parse_mode='Markdown'
-            )
-        except Exception:
-            safe_delete_message(chat_id, message_id)
-            bot.send_message(chat_id, response_text, reply_markup=get_back_to_main_markup(), parse_mode='Markdown')
-
-
-    # --- ЗАКАЗ ПФ: ЛОГИКА ---
-    elif call.data == 'order_pf':
-        # *ВСЕГДА* редактируем текущее сообщение для показа меню
-        order_text = "Выберите вариант:"
-        try:
-            bot.edit_message_text(
-                chat_id=chat_id, 
-                message_id=message_id, 
-                text=order_text, 
-                reply_markup=get_duration_markup()
-            )
-        except Exception:
-             # Если edit не удался, удаляем и отправляем новое
-            safe_delete_message(chat_id, message_id)
-            bot.send_message(
-                chat_id, 
-                order_text, 
-                reply_markup=get_duration_markup()
-            )
-        
-    elif call.data.startswith('duration_'):
-        duration_key = call.data.split('_')[1] 
-        user_data[chat_id]['duration'] = duration_key
-        
-        # Редактируем текущее сообщение
-        duration_text = "Выберите количество ПФ в день:"
-        try:
-            bot.edit_message_text(
-                chat_id=chat_id, 
-                message_id=message_id, 
-                text=duration_text, 
-                reply_markup=get_pf_count_markup()
-            )
-        except Exception:
-            safe_delete_message(chat_id, message_id)
-            bot.send_message(
-                chat_id, 
-                duration_text, 
-                reply_markup=get_pf_count_markup()
-            )
-
-    elif call.data.startswith('pf_count_'):
-        pf_count = call.data.split('_')[2] 
-        user_data[chat_id]['pf_count'] = pf_count
-        
-        # Редактируем текущее сообщение
-        final_text = (
-            "Если вы будете запускать на несколько \n"
-            "объявлений - КАЖДАЯ ССЫЛКА С \n"
-            "НОВОЙ СТРОКИ 'CTRL+ENTER'."
-        )
-        
-        final_markup = telebot.types.InlineKeyboardMarkup()
-        final_markup.row(
-            telebot.types.InlineKeyboardButton(text='Назад', callback_data='back_to_pf_count')
-        )
-
-        try:
-            bot.edit_message_text(
-                chat_id=chat_id, 
-                message_id=message_id, 
-                text=final_text, 
-                reply_markup=final_markup
-            )
-        except Exception:
-            safe_delete_message(chat_id, message_id)
-            bot.send_message(
-                chat_id, 
-                final_text, 
-                reply_markup=final_markup
-            )
-
-    # --- НАВИГАЦИЯ НАЗАД В ПРОЦЕССЕ ЗАКАЗА ---
-    elif call.data == 'back_to_duration':
-        # Редактируем текущее сообщение
-        duration_text = "Выберите вариант:"
-        try:
-            bot.edit_message_text(
-                chat_id=chat_id, 
-                message_id=message_id, 
-                text=duration_text, 
-                reply_markup=get_duration_markup()
-            )
-        except Exception:
-            safe_delete_message(chat_id, message_id)
-            bot.send_message(
-                chat_id, 
-                duration_text, 
-                reply_markup=get_duration_markup()
-            )
-        
-    elif call.data == 'back_to_pf_count':
-        # Редактируем текущее сообщение
-        pf_count_text = "Выберите количество ПФ в день:"
-        try:
-            bot.edit_message_text(
-                chat_id=chat_id, 
-                message_id=message_id, 
-                text=pf_count_text, 
-                reply_markup=get_pf_count_markup()
-            )
-        except Exception:
-            safe_delete_message(chat_id, message_id)
-            bot.send_message(
-                chat_id, 
-                pf_count_text, 
-                reply_markup=get_pf_count_markup()
-            )
-
-
-# --- ОБРАБОТЧИК СООБЩЕНИЙ КЛИЕНТОВ ---
-@bot.message_handler(func=lambda m: m.chat.id != OWNER_ID)
-def client_msg(m):
-    user_id = m.chat.id
-    username = m.from_user.username or "без_юзернейма"
-    text = m.text
-    
-    # Текущий функционал (любое сообщение идет админу)
-    bot.send_message(
-        OWNER_ID,
-        f"Новый заказ от @{username} (ID: {user_id})\n\nСообщение: {text}\n\nОтветьте реплаем — клиент увидит:"
-    )
-    bot.send_message(user_id, "Сообщение принято! Ожидайте ответа от менеджера...")
-
-# --- ОБРАБОТЧИК ОТВЕТОВ АДМИНИСТРАТОРА ---
-@bot.message_handler(func=lambda m: m.chat.id == OWNER_ID and m.reply_to_message)
-def admin_reply(m):
-    reply = m.reply_to_message.text
-    if "Новый заказ от" in reply or "Сообщение:" in reply:
-        try:
-            start_index = reply.find("ID: ") + 4
-            end_index = reply.find(")", start_index)
-            client_id = int(reply[start_index:end_index])
-            
-            bot.send_message(client_id, f"Ответ от менеджера:\n{m.text}")
-            bot.send_message(OWNER_ID, "Отправлено клиенту.")
-        except Exception as e:
-            bot.send_message(OWNER_ID, f"Ошибка ID или парсинга. Проверьте формат. Ошибка: {e}")
-
-# --- WEBHOOK И ЗАПУСК ---
-@app.route(f'/{TOKEN}', methods=['POST'])
-def webhook():
-    update = telebot.types.Update.de_json(request.get_data().decode('utf-8'))
-    bot.process_new_updates([update])
-    return 'OK', 200
-
-if __name__ == '__main__':
-    bot.remove_webhook()
-    bot.set_webhook(url=f"https://{os.environ['RENDER_EXTERNAL_HOSTNAME']}/{TOKEN}")
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
