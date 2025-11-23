@@ -6,9 +6,8 @@ import re
 app = Flask(__name__)
 
 # --- КОНФИГУРАЦИЯ БОТА И СЕРВЕРА ---
-# ВНИМАНИЕ: Убедитесь, что эти переменные установлены в окружении Render
 TOKEN = os.environ['TOKEN']
-OWNER_ID = int(os.environ['OWNER_ID']) # ID администратора (вас)
+OWNER_ID = int(os.environ['OWNER_ID'])
 bot = telebot.TeleBot(TOKEN)
 
 # ИМИТАЦИЯ БАЗЫ ДАННЫХ 
@@ -22,6 +21,7 @@ YOUR_CARD_NUMBER = "2204320348572225"
 MIN_DEPOSIT_AMOUNT = 400
 
 # ПРАЙС-ЛИСТ: ЦЕНЫ ЗА 1 ПФ в день
+# Используем предыдущую цену 1.0. Если 995 - опечатка, замените 1.0 на 995.0
 PRICE_PER_PF_DAILY = 1.0 
 
 # Коэффициенты для длительности (Скидки за объем)
@@ -75,7 +75,6 @@ def get_user_balance(user_id):
 # --- ФУНКЦИИ КЛАВИАТУР ---
 
 def get_main_menu_markup():
-    # Оформление по аналогии с видео конкурентов и вашими данными (1000059968.mp4, 1000059794.jpg)
     markup = telebot.types.InlineKeyboardMarkup()
     markup.row(
         telebot.types.InlineKeyboardButton(text='🚀 Заказать ПФ', callback_data='order_pf'),
@@ -98,7 +97,7 @@ def get_main_menu_markup():
     return markup
 
 def get_duration_markup():
-    # Цены убраны с этого шага (согласно вашему запросу и видео 1000059966.mp4)
+    # Цены убраны с этого шага 
     markup = telebot.types.InlineKeyboardMarkup()
     
     markup.row(
@@ -118,15 +117,12 @@ def get_duration_markup():
     return markup
 
 def get_pf_count_markup(duration_key):
-    # На основе 1000059754.jpg
+    # !!! ИСПРАВЛЕНИЕ: Цены убраны с кнопок выбора количества ПФ !!!
     markup = telebot.types.InlineKeyboardMarkup()
     
-    price_50 = calculate_price(duration_key, 50)
-    price_100 = calculate_price(duration_key, 100)
-    
     markup.row(
-        telebot.types.InlineKeyboardButton(text=f'50 ПФ ({price_50}₽)', callback_data='pf_count_50'),
-        telebot.types.InlineKeyboardButton(text=f'100 ПФ ({price_100}₽)', callback_data='pf_count_100')
+        telebot.types.InlineKeyboardButton(text=f'50 ПФ', callback_data='pf_count_50'),
+        telebot.types.InlineKeyboardButton(text=f'100 ПФ', callback_data='pf_count_100')
     )
     
     markup.row(
@@ -135,7 +131,6 @@ def get_pf_count_markup(duration_key):
     return markup
 
 def get_account_markup():
-    # На основе 1000059792.jpg
     markup = telebot.types.InlineKeyboardMarkup()
     markup.row(
         telebot.types.InlineKeyboardButton(text='💳 Пополнить баланс', callback_data='account_deposit')
@@ -152,7 +147,6 @@ def get_account_markup():
     return markup
     
 def get_faq_markup():
-    # На основе 1000059779.jpg, 1000059791.jpg
     markup = telebot.types.InlineKeyboardMarkup()
     markup.row(
         telebot.types.InlineKeyboardButton(text='Вопросы и ответы', callback_data='faq_qna'),
@@ -219,7 +213,6 @@ def process_deposit_amount(message):
     amount = 0
 
     try:
-        # Очистка и конвертация
         cleaned_text = re.sub(r'[^\d\.]', '', deposit_text.lower().replace(',', '.'))
         amount = int(float(cleaned_text))
         
@@ -236,11 +229,11 @@ def process_deposit_amount(message):
         safe_delete_message(chat_id, message.message_id)
         return
 
-    # --- ИНСТРУКЦИЯ ПО ОПЛАТЕ ДЛЯ КЛИЕНТА (ОТОБРАЖАЕТ ВАШУ КАРТУ) ---
+    # !!! ИСПРАВЛЕНИЕ: Инструкция по оплате с картой !!!
     payment_instruction = (
         f"✅ *Ваш запрос на пополнение на {amount} ₽ принят!*\n\n"
-        f"Для оплаты переведите *{amount} ₽* на карту:\n"
-        f"💳 **{YOUR_CARD_NUMBER}**\n\n" # <--- ВАША КАРТА
+        "Для оплаты переведите *ТОЧНО* эту сумму на карту:\n"
+        f"💳 **{YOUR_CARD_NUMBER}**\n\n" 
         "❗️ *Обязательно переводите ТОЧНО эту сумму. Менеджер вручную "
         "проверит поступление и зачислит средства.*\n\n"
         f"Для подтверждения оплаты напишите нашему менеджеру: **@{MANAGER_USERNAME}**"
@@ -316,8 +309,14 @@ def request_links(message):
         user_data[chat_id]['pf_count'] = None
         return 
         
+    # Формируем текст для последнего шага, включая цену
+    duration_name = DURATION_NAMES.get(duration_key, 'N/A')
+    
     final_text = (
-        f"💰 *Заказ на {total_price} ₽.* Средства будут списаны после подтверждения.\n\n"
+        f"✅ *Ваш заказ готов к оплате*\n\n"
+        f"ПФ в день: *{pf_count}*\n"
+        f"Длительность: *{duration_name}*\n"
+        f"ИТОГО: *{total_price} ₽*\n\n" # <--- Цена отображается здесь
         "🔗 *Отправьте ссылки*\n"
         "КАЖДАЯ ССЫЛКА С НОВОЙ СТРОКИ (`CTRL+ENTER`)."
     )
@@ -584,6 +583,8 @@ def callback_inline(call):
         user_data[chat_id]['duration'] = duration_key
         
         duration_name = DURATION_NAMES.get(duration_key, 'Заказ')
+        
+        # Цена убрана с этого шага, как в видео конкурентов
         duration_text = f"Выбран срок: *{duration_name}*. Теперь выберите количество ПФ в день:"
         
         try:
@@ -609,6 +610,7 @@ def callback_inline(call):
         
         safe_delete_message(chat_id, message_id)
         
+        # Переходим к последнему шагу, где отображается итоговая цена
         request_links(call.message)
         
     elif call.data == 'back_to_duration':
@@ -681,11 +683,11 @@ def admin_reply(m):
                     # ОТПРАВКА СООБЩЕНИЯ КЛИЕНТУ О ПОПОЛНЕНИИ
                     bot.send_message(
                         client_id, 
-                        f"✅ *Баланс пополнен!* 🎉\n\n" # <--- Сообщение для клиента
+                        f"✅ *Баланс пополнен!* 🎉\n\n" 
                         f"На счет зачислено *{amount_to_add} ₽*.\n"
                         f"Текущий баланс: *{new_balance} ₽*.", 
                         parse_mode='Markdown',
-                        reply_markup=get_main_menu_markup() # Возвращаем в основное меню
+                        reply_markup=get_main_menu_markup()
                     )
                     bot.send_message(OWNER_ID, f"Баланс клиента {client_id} пополнен на {amount_to_add} ₽. Новый баланс: {new_balance} ₽.")
                     return 
