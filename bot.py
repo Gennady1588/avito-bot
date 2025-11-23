@@ -263,7 +263,7 @@ def process_deposit_amount(message):
     markup.row(
         telebot.types.InlineKeyboardButton(text='✍️ Связаться с менеджером', url=f'https://t.me/{MANAGER_USERNAME}')
     )
-    # ИСПРАВЛЕНИЕ: Добавляем кнопку отмены
+    # Кнопка отмены, добавленная на предыдущем шаге
     markup.row(
         telebot.types.InlineKeyboardButton(text='🔙 Отмена / Назад', callback_data='back_to_main_menu')
     )
@@ -478,6 +478,8 @@ def start(m):
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call):
+    # Эта строка обязательна для предотвращения таймаутов, 
+    # которые могут быть причиной "вылетов".
     bot.answer_callback_query(call.id) 
     chat_id = call.message.chat.id
     message_id = call.message.message_id
@@ -694,11 +696,19 @@ def admin_reply(m):
         if client_id == 0:
             raise ValueError("ID клиента не найден.")
 
-        # 2. Обработка команды зачисления
-        if m.text.lower().startswith('/add_balance '):
+        # 2. Обработка команды зачисления (ИСПРАВЛЕНО)
+        if m.text.lower().startswith('/add_balance'): 
+            
+            parts = m.text.split()
+            if len(parts) < 2:
+                bot.send_message(OWNER_ID, "❌ *Ошибка.* Не указана сумма. Формат: `/add_balance 1000`", parse_mode='Markdown')
+                return
+            
             try:
-                amount_str = m.text.split(' ')[1]
-                amount_to_add = round(float(re.sub(r'[^\d\.]', '', amount_str.replace(',', '.'))), 2)
+                amount_str = parts[1]
+                # Удаляем все, кроме цифр и точки/запятой, затем приводим к числу
+                cleaned_amount_str = re.sub(r'[^\d\.]', '', amount_str.lower().replace(',', '.'))
+                amount_to_add = round(float(cleaned_amount_str), 2)
                 
                 if amount_to_add > 0:
                     user_balances[client_id] = get_user_balance(client_id) + amount_to_add
@@ -713,11 +723,14 @@ def admin_reply(m):
                         parse_mode='Markdown',
                         reply_markup=get_main_menu_markup()
                     )
-                    bot.send_message(OWNER_ID, f"Баланс клиента {client_id} пополнен на {amount_to_add} ₽. Новый баланс: {new_balance} ₽.")
+                    bot.send_message(OWNER_ID, f"✅ Баланс клиента {client_id} пополнен на {amount_to_add} ₽. Новый баланс: {new_balance} ₽.")
                     return 
+                else:
+                    bot.send_message(OWNER_ID, "❌ *Ошибка.* Сумма должна быть положительной.", parse_mode='Markdown')
+                    return
 
-            except Exception:
-                bot.send_message(OWNER_ID, "Ошибка при зачислении баланса. Формат: `/add_balance 1000`", parse_mode='Markdown')
+            except ValueError:
+                bot.send_message(OWNER_ID, "❌ *Ошибка.* Некорректный формат суммы. Формат: `/add_balance 1000`", parse_mode='Markdown')
                 return
                 
         # 3. Стандартный ответ клиенту
@@ -725,7 +738,8 @@ def admin_reply(m):
         bot.send_message(OWNER_ID, "Ответ отправлен клиенту.")
         
     except Exception as e:
-        bot.send_message(OWNER_ID, f"Ошибка при обработке реплая: {e}")
+        # Общий перехват, если что-то пошло не так (например, не удалось отправить сообщение клиенту)
+        bot.send_message(OWNER_ID, f"🚨 *КРИТИЧЕСКАЯ ОШИБКА* при обработке реплая:\n\n`{e}`\n\nСообщение: {m.text}", parse_mode='Markdown')
 
 
 # --- WEBHOOK И ЗАПУСК ---
