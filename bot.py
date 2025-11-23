@@ -263,6 +263,10 @@ def process_deposit_amount(message):
     markup.row(
         telebot.types.InlineKeyboardButton(text='✍️ Связаться с менеджером', url=f'https://t.me/{MANAGER_USERNAME}')
     )
+    # ИСПРАВЛЕНИЕ: Добавляем кнопку отмены
+    markup.row(
+        telebot.types.InlineKeyboardButton(text='🔙 Отмена / Назад', callback_data='back_to_main_menu')
+    )
 
     # --- УВЕДОМЛЕНИЕ АДМИНИСТРАТОРА ---
     deposit_summary_for_admin = (
