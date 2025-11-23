@@ -20,39 +20,53 @@ MANAGER_USERNAME = "Hiluxe56"
 YOUR_CARD_NUMBER = "2204320348572225" 
 MIN_DEPOSIT_AMOUNT = 400
 
-# ПРАЙС-ЛИСТ: ЦЕНЫ ЗА 1 ПФ в день
-# Используем предыдущую цену 1.0. Если 995 - опечатка, замените 1.0 на 995.0
-PRICE_PER_PF_DAILY = 1.0 
+# !!! ИСПРАВЛЕНИЕ ЛОГИКИ ЦЕНЫ !!!
+# Базовая цена 50 ПФ за 1 день. Цена 100 ПФ будет в два раза больше.
+PRICE_50_PF_DAILY = 799 
 
-# Коэффициенты для длительности (Скидки за объем)
-DURATION_COEFFICIENTS = {
-    '1d': 1.0,   
-    '2d': 1.9,   
-    '3d': 2.7,   
-    '5d': 4.0,   
-    '7d': 5.0,   
-    '30d': 18.0  
+# Дни для расчета
+DURATION_DAYS = {
+    '1d': 1,   
+    '2d': 2,   
+    '3d': 3,   
+    '5d': 5,   
+    '7d': 7,   
+    '30d': 30  
 }
+
+# Имена для отображения
 DURATION_NAMES = {
     '1d': '1 День', '2d': '2 Дня', '3d': '3 Дня', 
-    '5d': '5 Дней', '7d': '7 Дней', '30d': 'Месяц'
+    '5d': '5 Дней', '7d': '7 Дней', '30d': 'Месяц (30 Дней)'
 }
 
 # --- ФУНКЦИИ РАСЧЕТА СТОИМОСТИ ---
 
 def calculate_price(duration_key, pf_count):
-    """Рассчитывает общую стоимость заказа."""
+    """
+    Рассчитывает общую стоимость заказа без скидок.
+    Цена = (Базовая цена за ПФ) * (Количество Дней).
+    """
     
     try:
         pf_count = int(pf_count)
+        days = DURATION_DAYS.get(duration_key, 1)
     except ValueError:
         return 0.0
         
-    daily_cost = PRICE_PER_PF_DAILY * pf_count
-    coefficient = DURATION_COEFFICIENTS.get(duration_key, 1.0)
-    total_price = daily_cost * coefficient
+    # Базовая цена за 1 день работы с выбранным количеством ПФ
+    if pf_count == 50:
+        daily_cost = PRICE_50_PF_DAILY
+    elif pf_count == 100:
+        daily_cost = PRICE_50_PF_DAILY * 2 # 1598 руб.
+    else:
+        # Для других значений ПФ, если они появятся
+        return 0.0 
     
-    return round(total_price, 2)
+    # Общая стоимость
+    total_price = daily_cost * days
+    
+    return round(total_price, 0) # Округляем до целого рубля
 
 # --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 def safe_delete_message(chat_id, message_id):
@@ -96,12 +110,15 @@ def get_main_menu_markup():
     )
     return markup
 
-def get_duration_markup():
-    # Цены убраны с этого шага 
+def get_duration_markup(pf_count='50'):
+    # На этом шаге показываем только базовую цену за 1 день, 
+    # так как цена зависит от ПФ (50 или 100), который еще не выбран.
     markup = telebot.types.InlineKeyboardMarkup()
     
+    price_50_1d = calculate_price('1d', 50) 
+    
     markup.row(
-        telebot.types.InlineKeyboardButton(text=f'День', callback_data='duration_1d'),
+        telebot.types.InlineKeyboardButton(text=f'День (от {int(price_50_1d)}₽)', callback_data='duration_1d'),
         telebot.types.InlineKeyboardButton(text=f'2 дня', callback_data='duration_2d'),
         telebot.types.InlineKeyboardButton(text=f'3 дня', callback_data='duration_3d')
     )
@@ -117,12 +134,15 @@ def get_duration_markup():
     return markup
 
 def get_pf_count_markup(duration_key):
-    # !!! ИСПРАВЛЕНИЕ: Цены убраны с кнопок выбора количества ПФ !!!
+    # Цены рассчитаны и отображаются на кнопках выбора ПФ
     markup = telebot.types.InlineKeyboardMarkup()
     
+    price_50 = calculate_price(duration_key, 50)
+    price_100 = calculate_price(duration_key, 100)
+    
     markup.row(
-        telebot.types.InlineKeyboardButton(text=f'50 ПФ', callback_data='pf_count_50'),
-        telebot.types.InlineKeyboardButton(text=f'100 ПФ', callback_data='pf_count_100')
+        telebot.types.InlineKeyboardButton(text=f'50 ПФ ({int(price_50)}₽)', callback_data='pf_count_50'),
+        telebot.types.InlineKeyboardButton(text=f'100 ПФ ({int(price_100)}₽)', callback_data='pf_count_100')
     )
     
     markup.row(
@@ -229,11 +249,11 @@ def process_deposit_amount(message):
         safe_delete_message(chat_id, message.message_id)
         return
 
-    # !!! ИСПРАВЛЕНИЕ: Инструкция по оплате с картой !!!
+    # !!! Четкое отображение карты !!!
     payment_instruction = (
         f"✅ *Ваш запрос на пополнение на {amount} ₽ принят!*\n\n"
         "Для оплаты переведите *ТОЧНО* эту сумму на карту:\n"
-        f"💳 **{YOUR_CARD_NUMBER}**\n\n" 
+        f"💳 **`{YOUR_CARD_NUMBER}`**\n\n" 
         "❗️ *Обязательно переводите ТОЧНО эту сумму. Менеджер вручную "
         "проверит поступление и зачислит средства.*\n\n"
         f"Для подтверждения оплаты напишите нашему менеджеру: **@{MANAGER_USERNAME}**"
@@ -285,13 +305,14 @@ def request_links(message):
     pf_count = user_data[chat_id]['pf_count']
     total_price = calculate_price(duration_key, pf_count)
     current_balance = get_user_balance(chat_id)
+    duration_name = DURATION_NAMES.get(duration_key, 'N/A')
     
     if current_balance < total_price:
         required = round(total_price - current_balance, 2)
         
         insufficient_funds_text = (
             "❌ *Недостаточно средств!*\n\n"
-            f"Стоимость заказа: *{total_price} ₽*\n"
+            f"Стоимость заказа: *{int(total_price)} ₽*\n"
             f"Ваш баланс: *{current_balance} ₽*\n"
             f"Необходимо пополнить: *{required} ₽*\n\n"
             "Пожалуйста, пополните баланс в разделе 'Личный кабинет'."
@@ -309,14 +330,11 @@ def request_links(message):
         user_data[chat_id]['pf_count'] = None
         return 
         
-    # Формируем текст для последнего шага, включая цену
-    duration_name = DURATION_NAMES.get(duration_key, 'N/A')
-    
+    # Цена убрана с этого шага 
     final_text = (
-        f"✅ *Ваш заказ готов к оплате*\n\n"
+        f"✅ *Параметры заказа выбраны*\n\n"
         f"ПФ в день: *{pf_count}*\n"
-        f"Длительность: *{duration_name}*\n"
-        f"ИТОГО: *{total_price} ₽*\n\n" # <--- Цена отображается здесь
+        f"Длительность: *{duration_name}*\n\n"
         "🔗 *Отправьте ссылки*\n"
         "КАЖДАЯ ССЫЛКА С НОВОЙ СТРОКИ (`CTRL+ENTER`)."
     )
@@ -349,7 +367,8 @@ def process_links_and_send_order(message):
             parse_mode='Markdown'
         )
         
-        request_links(type('obj', (object,), {'chat': type('chat', (object,), {'id': chat_id})})())
+        # Повторно запрашиваем ссылки, чтобы не потерять контекст
+        request_links(type('obj', (object,), {'chat': type('chat', (object,), {'id': chat_id}), 'message_id': None})()) 
         return
 
     links = message.text
@@ -369,7 +388,7 @@ def process_links_and_send_order(message):
         user_balances[chat_id] -= total_price
         user_balances[chat_id] = round(user_balances[chat_id], 2)
         
-        balance_status = f"*Списано {total_price} ₽*. Новый баланс: *{get_user_balance(chat_id)} ₽*."
+        balance_status = f"*Списано {int(total_price)} ₽*. Новый баланс: *{get_user_balance(chat_id)} ₽*."
         paid = True
     else:
         balance_status = "❌ *Ошибка списания.* Недостаточно средств или цена заказа 0 ₽. Заказ отменен."
@@ -379,7 +398,7 @@ def process_links_and_send_order(message):
     order_summary_for_admin = (
         "🔥 *НОВЫЙ ЗАКАЗ ПФ* 🔥\n\n"
         f"Пользователь: @{message.from_user.username or 'без_юзернейма'} (ID: `{chat_id}`)\n"
-        f"Сумма заказа: *{total_price} ₽*\n"
+        f"Сумма заказа: *{int(total_price)} ₽*\n"
         f"Статус оплаты: {'✅ Оплачен' if paid else '❌ Не оплачен (Ошибка)'}\n"
         f"Продолжительность: *{duration_text}*\n"
         f"Количество ПФ в день: *{pf_count}*\n"
@@ -397,8 +416,8 @@ def process_links_and_send_order(message):
     
     if paid:
         confirmation_text = (
-            f"✅ *Ваш заказ принят и оплачен!*\n\n"
-            f"Стоимость: *{total_price} ₽*. {balance_status}\n\n"
+            f"✅ *Ваш заказ принят и оплачен!*\n\n" # <--- Итоговая цена отображается здесь
+            f"Стоимость: *{int(total_price)} ₽*. {balance_status}\n\n"
             "Менеджер проверит ссылки и, в случае успеха, заказ будет запущен. "
             "Вам придет оповещение о запуске.\n\n"
             "⏳ *Ожидайте...*"
@@ -562,7 +581,8 @@ def callback_inline(call):
             bot.send_message(chat_id, promo_text, reply_markup=markup, parse_mode='Markdown')
 
     elif call.data == 'order_pf':
-        order_text = "Выберите вариант:"
+        # Переходим к выбору длительности (с указанием минимальной цены)
+        order_text = "Выберите желаемую длительность заказа:"
         try:
             bot.edit_message_text(
                 chat_id=chat_id, 
@@ -584,7 +604,7 @@ def callback_inline(call):
         
         duration_name = DURATION_NAMES.get(duration_key, 'Заказ')
         
-        # Цена убрана с этого шага, как в видео конкурентов
+        # Теперь показываем цены, зависящие от количества ПФ (50 или 100)
         duration_text = f"Выбран срок: *{duration_name}*. Теперь выберите количество ПФ в день:"
         
         try:
@@ -610,11 +630,11 @@ def callback_inline(call):
         
         safe_delete_message(chat_id, message_id)
         
-        # Переходим к последнему шагу, где отображается итоговая цена
+        # Переходим к шагу запроса ссылок (без цены!)
         request_links(call.message)
         
     elif call.data == 'back_to_duration':
-        order_text = "Выберите вариант:"
+        order_text = "Выберите желаемую длительность заказа:"
         try:
             bot.edit_message_text(
                 chat_id=chat_id, 
