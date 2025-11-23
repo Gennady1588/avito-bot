@@ -1,12 +1,12 @@
 from flask import Flask, request
 import telebot
 import os
-import re # Для более чистого парсинга ID
+import re 
 
 app = Flask(__name__)
 
 # --- КОНФИГУРАЦИЯ БОТА И СЕРВЕРА ---
-# Важно: Убедитесь, что эти переменные установлены в окружении Render
+# ВНИМАНИЕ: Убедитесь, что эти переменные установлены в окружении Render
 TOKEN = os.environ['TOKEN']
 OWNER_ID = int(os.environ['OWNER_ID']) # ID администратора (вас)
 bot = telebot.TeleBot(TOKEN)
@@ -17,7 +17,8 @@ user_data = {}
 
 # --- КОНФИГУРАЦИЯ МЕНЕДЖЕРА, КАРТЫ И ЦЕН ---
 MANAGER_USERNAME = "Hiluxe56"
-YOUR_CARD_NUMBER = "2204320348572225" # ВАША КАРТА
+# !!! ВАША КАРТА !!!
+YOUR_CARD_NUMBER = "2204320348572225" 
 MIN_DEPOSIT_AMOUNT = 400
 
 # ПРАЙС-ЛИСТ: ЦЕНЫ ЗА 1 ПФ в день
@@ -25,12 +26,12 @@ PRICE_PER_PF_DAILY = 1.0
 
 # Коэффициенты для длительности (Скидки за объем)
 DURATION_COEFFICIENTS = {
-    '1d': 1.0,   # День
-    '2d': 1.9,   # 2 дня (скидка ~5%)
-    '3d': 2.7,   # 3 дня (скидка ~10%)
-    '5d': 4.0,   # 5 дней (скидка ~20%)
-    '7d': 5.0,   # 7 дней (скидка ~28%)
-    '30d': 18.0  # Месяц (скидка ~40%)
+    '1d': 1.0,   
+    '2d': 1.9,   
+    '3d': 2.7,   
+    '5d': 4.0,   
+    '7d': 5.0,   
+    '30d': 18.0  
 }
 DURATION_NAMES = {
     '1d': '1 День', '2d': '2 Дня', '3d': '3 Дня', 
@@ -42,11 +43,10 @@ DURATION_NAMES = {
 def calculate_price(duration_key, pf_count):
     """Рассчитывает общую стоимость заказа."""
     
-    # Конвертируем pf_count в int для расчетов
     try:
         pf_count = int(pf_count)
     except ValueError:
-        return 0.0 # Возвращаем 0, если не удалось распарсить
+        return 0.0
         
     daily_cost = PRICE_PER_PF_DAILY * pf_count
     coefficient = DURATION_COEFFICIENTS.get(duration_key, 1.0)
@@ -58,10 +58,9 @@ def calculate_price(duration_key, pf_count):
 def safe_delete_message(chat_id, message_id):
     """Пытается удалить сообщение, игнорируя ошибки."""
     try:
-        # Пытаемся удалить сообщение
-        bot.delete_message(chat_id, message_id)
+        if message_id:
+            bot.delete_message(chat_id, message_id)
     except Exception:
-        # Игнорируем ошибку, если сообщение уже удалено или недоступно
         pass 
         
 def get_user_balance(user_id):
@@ -76,19 +75,19 @@ def get_user_balance(user_id):
 # --- ФУНКЦИИ КЛАВИАТУР ---
 
 def get_main_menu_markup():
-    # На основе 1000059746.jpg, 1000059794.jpg
+    # Оформление по аналогии с видео конкурентов и вашими данными (1000059968.mp4, 1000059794.jpg)
     markup = telebot.types.InlineKeyboardMarkup()
     markup.row(
         telebot.types.InlineKeyboardButton(text='🚀 Заказать ПФ', callback_data='order_pf'),
         telebot.types.InlineKeyboardButton(text='🚪 Личный кабинет', callback_data='my_account')
     )
     markup.row(
-        telebot.types.InlineKeyboardButton(text='📗 Правила пользования', url='https://t.me/Avitounlock/18'),
-        telebot.types.InlineKeyboardButton(text='🧑‍💻 Тех поддержка', url='https://t.me/Avitounlock') 
-    )
-    markup.row(
         telebot.types.InlineKeyboardButton(text='💬 FAQ / Кейсы', callback_data='faq'),
         telebot.types.InlineKeyboardButton(text='🎁 Промокоды', callback_data='promocodes')
+    )
+    markup.row(
+        telebot.types.InlineKeyboardButton(text='📗 Правила пользования', url='https://t.me/Avitounlock/18'),
+        telebot.types.InlineKeyboardButton(text='🧑‍💻 Тех поддержка', url='https://t.me/Avitounlock') 
     )
     markup.row(
         telebot.types.InlineKeyboardButton(text='Подбор стратегии', url=f'https://t.me/{MANAGER_USERNAME}')
@@ -99,28 +98,19 @@ def get_main_menu_markup():
     return markup
 
 def get_duration_markup():
-    # На основе 1000059753.jpg
+    # Цены убраны с этого шага (согласно вашему запросу и видео 1000059966.mp4)
     markup = telebot.types.InlineKeyboardMarkup()
     
-    # Цены рассчитаны для 50 ПФ
-    price_1d_50 = calculate_price('1d', 50)
-    price_2d_50 = calculate_price('2d', 50)
-    price_3d_50 = calculate_price('3d', 50)
-    
     markup.row(
-        telebot.types.InlineKeyboardButton(text=f'День ({price_1d_50}₽/50ПФ)', callback_data='duration_1d'),
-        telebot.types.InlineKeyboardButton(text=f'2 дня ({price_2d_50}₽/50ПФ)', callback_data='duration_2d'),
-        telebot.types.InlineKeyboardButton(text=f'3 дня ({price_3d_50}₽/50ПФ)', callback_data='duration_3d')
+        telebot.types.InlineKeyboardButton(text=f'День', callback_data='duration_1d'),
+        telebot.types.InlineKeyboardButton(text=f'2 дня', callback_data='duration_2d'),
+        telebot.types.InlineKeyboardButton(text=f'3 дня', callback_data='duration_3d')
     )
     
-    price_5d_50 = calculate_price('5d', 50)
-    price_7d_50 = calculate_price('7d', 50)
-    price_30d_50 = calculate_price('30d', 50)
-    
     markup.row(
-        telebot.types.InlineKeyboardButton(text=f'5 дней ({price_5d_50}₽/50ПФ)', callback_data='duration_5d'),
-        telebot.types.InlineKeyboardButton(text=f'7 дней ({price_7d_50}₽/50ПФ)', callback_data='duration_7d'),
-        telebot.types.InlineKeyboardButton(text=f'Месяц ({price_30d_50}₽/50ПФ)', callback_data='duration_30d')
+        telebot.types.InlineKeyboardButton(text=f'5 дней', callback_data='duration_5d'),
+        telebot.types.InlineKeyboardButton(text=f'7 дней', callback_data='duration_7d'),
+        telebot.types.InlineKeyboardButton(text=f'Месяц', callback_data='duration_30d')
     )
     markup.row(
         telebot.types.InlineKeyboardButton(text='Назад', callback_data='back_to_main_menu')
@@ -192,9 +182,7 @@ def request_deposit_amount(message):
         "Введите желаемую сумму пополнения:"
     )
     
-    # Пытаемся изменить сообщение, если это возможно, иначе отправляем новое
     try:
-        # Проверка, что это не новое сообщение от start, а редактирование
         if hasattr(message, 'message_id'):
             sent_msg = bot.edit_message_text(
                 chat_id=chat_id,
@@ -203,7 +191,7 @@ def request_deposit_amount(message):
                 parse_mode='Markdown'
             )
         else:
-            raise Exception("No message_id") # Переходим к отправке нового сообщения
+            raise Exception("No message_id") 
     except Exception:
         safe_delete_message(chat_id, getattr(message, 'message_id', None))
         sent_msg = bot.send_message(
@@ -212,31 +200,26 @@ def request_deposit_amount(message):
             parse_mode='Markdown'
         )
 
-    # Регистрируем следующий шаг
     bot.register_next_step_handler(sent_msg, process_deposit_amount)
 
 def process_deposit_amount(message):
     chat_id = message.chat.id
     
-    # 1. Валидация ввода
     if not message.text:
         bot.send_message(
             chat_id, 
             "🚫 *Ошибка ввода.* Пожалуйста, введите сумму только *цифрами*.",
-            parse_mode='Markdown'
-        )
-        safe_delete_message(chat_id, message.message_id)
-        bot.send_message(
-            chat_id, 
-            "Пожалуйста, попробуйте снова, нажав на '💳 Пополнить баланс'.",
+            parse_mode='Markdown',
             reply_markup=get_account_markup()
         )
+        safe_delete_message(chat_id, message.message_id)
         return
 
     deposit_text = message.text.strip()
     amount = 0
 
     try:
+        # Очистка и конвертация
         cleaned_text = re.sub(r'[^\d\.]', '', deposit_text.lower().replace(',', '.'))
         amount = int(float(cleaned_text))
         
@@ -244,25 +227,20 @@ def process_deposit_amount(message):
             raise ValueError("Сумма меньше минимальной")
         
     except ValueError:
-        # Если ввод неверен, просим ввести снова
         bot.send_message(
             chat_id, 
             f"🚫 *Ошибка ввода.* Пожалуйста, введите корректную сумму (минимум {MIN_DEPOSIT_AMOUNT} ₽) только цифрами (например, 500).",
-            parse_mode='Markdown'
-        )
-        safe_delete_message(chat_id, message.message_id)
-        bot.send_message(
-            chat_id, 
-            "Пожалуйста, попробуйте снова, нажав на '💳 Пополнить баланс'.",
+            parse_mode='Markdown',
             reply_markup=get_account_markup()
         )
+        safe_delete_message(chat_id, message.message_id)
         return
 
-    # --- ИНСТРУКЦИЯ ПО ОПЛАТЕ ДЛЯ КЛИЕНТА ---
+    # --- ИНСТРУКЦИЯ ПО ОПЛАТЕ ДЛЯ КЛИЕНТА (ОТОБРАЖАЕТ ВАШУ КАРТУ) ---
     payment_instruction = (
         f"✅ *Ваш запрос на пополнение на {amount} ₽ принят!*\n\n"
         f"Для оплаты переведите *{amount} ₽* на карту:\n"
-        f"💳 **{YOUR_CARD_NUMBER}**\n\n"
+        f"💳 **{YOUR_CARD_NUMBER}**\n\n" # <--- ВАША КАРТА
         "❗️ *Обязательно переводите ТОЧНО эту сумму. Менеджер вручную "
         "проверит поступление и зачислит средства.*\n\n"
         f"Для подтверждения оплаты напишите нашему менеджеру: **@{MANAGER_USERNAME}**"
@@ -280,7 +258,7 @@ def process_deposit_amount(message):
         f"Желаемая сумма: *{amount} ₽*\n"
         f"Карта для проверки: `{YOUR_CARD_NUMBER}`\n\n"
         f"➡️ *Необходимо проверить поступление:* **{amount} ₽**\n"
-        "Ответьте реплаем, чтобы подтвердить получение средств."
+        "Ответьте реплаем, чтобы подтвердить получение средств. Для зачисления используйте `/add_balance {сумма}`"
     )
     
     bot.send_message(
@@ -289,7 +267,6 @@ def process_deposit_amount(message):
         parse_mode='Markdown'
     )
     
-    # --- ОТПРАВКА ИНСТРУКЦИИ КЛИЕНТУ ---
     safe_delete_message(chat_id, message.message_id)
     
     bot.send_message(
@@ -306,9 +283,7 @@ def request_links(message):
     """Проверяет баланс и запрашивает ссылки, если средств достаточно."""
     chat_id = message.chat.id
     
-    # 1. Проверяем наличие временных данных
     if 'duration' not in user_data.get(chat_id, {}) or 'pf_count' not in user_data.get(chat_id, {}):
-        # Если данные потеряны (например, из-за перезапуска сервера)
         bot.send_message(chat_id, "❌ *Ошибка.* Данные о заказе потеряны. Начните, пожалуйста, заново.", parse_mode='Markdown', reply_markup=get_main_menu_markup())
         safe_delete_message(chat_id, getattr(message, 'message_id', None))
         return
@@ -319,7 +294,6 @@ def request_links(message):
     current_balance = get_user_balance(chat_id)
     
     if current_balance < total_price:
-        # Недостаточно средств
         required = round(total_price - current_balance, 2)
         
         insufficient_funds_text = (
@@ -330,7 +304,6 @@ def request_links(message):
             "Пожалуйста, пополните баланс в разделе 'Личный кабинет'."
         )
         
-        # ГЛАВНОЕ ИСПРАВЛЕНИЕ: Удаляем сообщение с кнопками перед отправкой ошибки
         safe_delete_message(chat_id, getattr(message, 'message_id', None)) 
         
         bot.send_message(
@@ -339,19 +312,16 @@ def request_links(message):
             reply_markup=get_account_markup(),
             parse_mode='Markdown'
         )
-        # Очищаем временные данные заказа
         user_data[chat_id]['duration'] = None
         user_data[chat_id]['pf_count'] = None
         return 
         
-    # 2. Если средств достаточно, запрашиваем ссылки
     final_text = (
         f"💰 *Заказ на {total_price} ₽.* Средства будут списаны после подтверждения.\n\n"
         "🔗 *Отправьте ссылки*\n"
         "КАЖДАЯ ССЫЛКА С НОВОЙ СТРОКИ (`CTRL+ENTER`)."
     )
     
-    # Удаляем предыдущее сообщение с кнопками выбора ПФ
     safe_delete_message(chat_id, getattr(message, 'message_id', None))
     
     sent_msg = bot.send_message(
@@ -362,7 +332,6 @@ def request_links(message):
     
     user_data[chat_id]['awaiting_links_msg_id'] = sent_msg.message_id
     
-    # Регистрируем следующий шаг
     bot.register_next_step_handler(sent_msg, process_links_and_send_order)
 
 
@@ -370,9 +339,7 @@ def process_links_and_send_order(message):
     """Обрабатывает ссылки, списывает баланс и отправляет заказ админу."""
     chat_id = message.chat.id
     
-    # 1. Проверка на текстовое сообщение (иначе next_step_handler будет потерян)
     if not message.text:
-        # Если пришел не текст
         if 'awaiting_links_msg_id' in user_data.get(chat_id, {}):
             safe_delete_message(chat_id, user_data[chat_id]['awaiting_links_msg_id'])
             del user_data[chat_id]['awaiting_links_msg_id']
@@ -383,18 +350,15 @@ def process_links_and_send_order(message):
             parse_mode='Markdown'
         )
         
-        # Перезапускаем запрос ссылок (используем dummy object, чтобы не удалить start/main menu)
         request_links(type('obj', (object,), {'chat': type('chat', (object,), {'id': chat_id})})())
         return
 
     links = message.text
     
-    # Удаляем сообщение с инструкцией по вводу ссылок
     if 'awaiting_links_msg_id' in user_data.get(chat_id, {}):
         safe_delete_message(chat_id, user_data[chat_id]['awaiting_links_msg_id'])
         del user_data[chat_id]['awaiting_links_msg_id']
     
-    # 2. Списание средств
     duration_key = user_data[chat_id].get('duration', 'N/A')
     pf_count = user_data[chat_id].get('pf_count', 0)
     total_price = calculate_price(duration_key, pf_count)
@@ -411,7 +375,6 @@ def process_links_and_send_order(message):
     else:
         balance_status = "❌ *Ошибка списания.* Недостаточно средств или цена заказа 0 ₽. Заказ отменен."
     
-    # 3. Уведомление администратора
     duration_text = DURATION_NAMES.get(duration_key, 'Неизвестно')
     
     order_summary_for_admin = (
@@ -433,7 +396,6 @@ def process_links_and_send_order(message):
         parse_mode='Markdown'
     )
     
-    # 4. Ответ клиенту
     if paid:
         confirmation_text = (
             f"✅ *Ваш заказ принят и оплачен!*\n\n"
@@ -448,7 +410,6 @@ def process_links_and_send_order(message):
             "Пожалуйста, пополните баланс и повторите заказ."
         )
 
-    # Удаляем сообщение, которое ввел клиент
     safe_delete_message(chat_id, message.message_id)
     
     bot.send_message(
@@ -475,11 +436,9 @@ def start(m):
         "📈 *ПФ на Авито* бот\n\n"
         "🚀 Мы работаем с Поведенческими Факторами на Avito (ПФ) — это "
         "инструмент, который помогает поднять ваше объявление на 1-ю "
-        "позицию в результатах поиска. Чем больше ПФ, тем выше ваше объявление "
-        "в выдаче и тем больше людей его увидят!\n\n"
-        "В InkarMedia мы уже более 4 лет помогаем тысячам клиентам достигать "
-        "отличных результатов на Авито и других платформах. Наша репутация "
-        "основана на реальных отзывах — на данный момент их уже более 2750+ ‼️\n"
+        "позицию в результатах поиска...\n\n"
+        "В InkarMedia мы уже более 4 лет помогаем тысячам клиентам... "
+        "Наша репутация основана на реальных отзывах — на данный момент их уже более 2750+ ‼️\n"
         "Ознакомьтесь с ними в нашем [Телеграм канале](https://t.me/Avitounlock) ✅ "
         "и убедитесь в качестве нашей работы!\n\n"
         "* Полное соблюдение правил Авито! Безопасно и надежно!\n"
@@ -501,7 +460,6 @@ def callback_inline(call):
     chat_id = call.message.chat.id
     message_id = call.message.message_id
     
-    # Инициализация user_data для безопасности
     if chat_id not in user_data:
         get_user_balance(chat_id) 
         
@@ -524,7 +482,6 @@ def callback_inline(call):
             safe_delete_message(chat_id, message_id)
             bot.send_message(chat_id, main_menu_text, reply_markup=get_main_menu_markup(), parse_mode='Markdown')
             
-    # --- ЛИЧНЫЙ КАБИНЕТ ---
     elif call.data == 'my_account':
         balance = get_user_balance(chat_id)
         referral_link = f"https://t.me/avitoup1_bot?start={chat_id}" 
@@ -563,15 +520,12 @@ def callback_inline(call):
         
         if account_key == 'deposit':
             safe_delete_message(chat_id, message_id)
-            # Передаем call.message для получения chat_id, чтобы request_deposit_amount
-            # мог отправить новое сообщение и зарегистрировать next_step.
             request_deposit_amount(call.message)
             return
         
         if account_key in ['orders', 'partner']:
             bot.send_message(chat_id, f"Раздел '{account_key.capitalize()}' временно недоступен или находится в разработке.", reply_markup=get_account_markup())
             
-    # --- FAQ / Промокоды ---
     elif call.data == 'faq':
         faq_text = "Выберите интересующий Вас раздел:"
         try:
@@ -583,7 +537,6 @@ def callback_inline(call):
     elif call.data.startswith('faq_'):
         topic = call.data.split('_', 1)[1]
         
-        # На основе 1000059790.jpg, fa8f1b63-db78-4707-a7a6-4e2efdb8ccec
         answer_text = f"Вы выбрали тему: {topic} (здесь будет подробный ответ)." 
         
         if topic == 'qna':
@@ -599,7 +552,6 @@ def callback_inline(call):
             bot.send_message(chat_id, answer_text, reply_markup=markup, parse_mode='Markdown')
             
     elif call.data == 'promocodes':
-        # На основе 1000059964.mp4
         promo_text = "🎁 *Промокоды*\n\nНа данный момент активных промокодов нет."
         markup = telebot.types.InlineKeyboardMarkup()
         markup.add(telebot.types.InlineKeyboardButton(text='Назад', callback_data='back_to_main_menu'))
@@ -610,7 +562,6 @@ def callback_inline(call):
             safe_delete_message(chat_id, message_id)
             bot.send_message(chat_id, promo_text, reply_markup=markup, parse_mode='Markdown')
 
-    # --- ЗАКАЗ ПФ ---
     elif call.data == 'order_pf':
         order_text = "Выберите вариант:"
         try:
@@ -656,15 +607,10 @@ def callback_inline(call):
         pf_count = call.data.split('_')[2] 
         user_data[chat_id]['pf_count'] = pf_count
         
-        # ИСПРАВЛЕННЫЙ ВЫЗОВ: Удаляем предыдущее сообщение с кнопками
         safe_delete_message(chat_id, message_id)
         
-        # Вызываем функцию request_links, передавая call.message, чтобы 
-        # она могла использовать chat_id и в случае ошибки удалить сообщение
-        # с кнопками, если удаление выше не сработало.
         request_links(call.message)
         
-    # --- НАВИГАЦИЯ НАЗАД В ПРОЦЕССЕ ЗАКАЗА ---
     elif call.data == 'back_to_duration':
         order_text = "Выберите вариант:"
         try:
@@ -686,12 +632,10 @@ def callback_inline(call):
 # --- ОБРАБОТЧИК СООБЩЕНИЙ КЛИЕНТОВ (для вопросов) ---
 @bot.message_handler(func=lambda m: m.chat.id != OWNER_ID and m.text and not m.reply_to_message)
 def client_msg(m):
-    # Этот обработчик ловит вопросы от клиента, которые не являются частью order_pf или deposit
     user_id = m.chat.id
     username = m.from_user.username or "без_юзернейма"
     text = m.text
     
-    # Отправка уведомления админу
     bot.send_message(
         OWNER_ID,
         f"📩 *СООБЩЕНИЕ ОТ КЛИЕНТА* 📩\n\n"
@@ -701,7 +645,6 @@ def client_msg(m):
         parse_mode='Markdown'
     )
     
-    # Ответ клиенту
     bot.send_message(
         user_id, 
         "Ваше сообщение принято! Ожидайте ответа от менеджера. Чтобы оформить заказ, нажмите '🚀 Заказать ПФ'.",
@@ -729,19 +672,20 @@ def admin_reply(m):
         if m.text.lower().startswith('/add_balance '):
             try:
                 amount_str = m.text.split(' ')[1]
-                # Очистка от лишних символов
                 amount_to_add = round(float(re.sub(r'[^\d\.]', '', amount_str.replace(',', '.'))), 2)
                 
                 if amount_to_add > 0:
                     user_balances[client_id] = get_user_balance(client_id) + amount_to_add
                     new_balance = user_balances[client_id]
                     
+                    # ОТПРАВКА СООБЩЕНИЯ КЛИЕНТУ О ПОПОЛНЕНИИ
                     bot.send_message(
                         client_id, 
-                        f"✅ *Баланс пополнен!*\n\n"
+                        f"✅ *Баланс пополнен!* 🎉\n\n" # <--- Сообщение для клиента
                         f"На счет зачислено *{amount_to_add} ₽*.\n"
                         f"Текущий баланс: *{new_balance} ₽*.", 
-                        parse_mode='Markdown'
+                        parse_mode='Markdown',
+                        reply_markup=get_main_menu_markup() # Возвращаем в основное меню
                     )
                     bot.send_message(OWNER_ID, f"Баланс клиента {client_id} пополнен на {amount_to_add} ₽. Новый баланс: {new_balance} ₽.")
                     return 
@@ -766,8 +710,6 @@ def webhook():
     return 'OK', 200
 
 if __name__ == '__main__':
-    # Обязательно замените <RENDER_EXTERNAL_HOSTNAME> на реальный адрес вашего Render сервиса
-    # Эта часть необходима для запуска на Render
     bot.remove_webhook()
     bot.set_webhook(url=f"https://{os.environ['RENDER_EXTERNAL_HOSTNAME']}/{TOKEN}")
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
