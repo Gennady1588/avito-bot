@@ -181,57 +181,25 @@ def request_deposit_amount(message):
         telebot.types.InlineKeyboardButton(text='🔙 Отмена / Назад', callback_data='back_to_main_menu')
     )
     
-    sent_msg = None
+    # ⚠️ КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправляем новое сообщение (для надежной регистрации next_step_handler) 
+    # и удаляем старое (кнопки)
+    safe_delete_message(chat_id, message.message_id) 
     
-    # ⚠️ Улучшенная логика: пытаемся редактировать, если не получилось - отправляем новое.
-    # ВАЖНО: message.message_id будет только если это колбэк, а не команда /deposit
-    is_callback = hasattr(message, 'message_id')
+    sent_msg = bot.send_message(
+        chat_id, 
+        deposit_request_text, 
+        reply_markup=markup, 
+        parse_mode='Markdown'
+    )
     
-    if is_callback:
-        try:
-            sent_msg = bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=message.message_id,
-                text=deposit_request_text,
-                reply_markup=markup, 
-                parse_mode='Markdown'
-            )
-        except Exception:
-             # Если не удалось отредактировать, отправляем как новое
-            sent_msg = bot.send_message(
-                chat_id, 
-                deposit_request_text, 
-                reply_markup=markup, 
-                parse_mode='Markdown'
-            )
-    else:
-        # Если это не колбэк (например, команда), просто отправляем новое
-        sent_msg = bot.send_message(
-            chat_id, 
-            deposit_request_text, 
-            reply_markup=markup, 
-            parse_mode='Markdown'
-        )
-
-    # ⚠️ КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Регистрируем хэндлер всегда, чтобы не потерять ответ
-    if sent_msg:
-        bot.register_next_step_handler(sent_msg, process_deposit_amount)
-    else:
-        # Если по какой-то причине даже send_message не сработал (редко, но возможно),
-        # то регистрируем хэндлер на следующее сообщение в чате
-        temp_msg = bot.send_message(
-            chat_id, 
-            "⚠️ Пожалуйста, введите сумму пополнения (снова).", 
-            reply_markup=markup,
-            parse_mode='Markdown'
-        )
-        bot.register_next_step_handler(temp_msg, process_deposit_amount)
+    # Регистрируем хэндлер на это новое сообщение
+    bot.register_next_step_handler(sent_msg, process_deposit_amount)
 
 
 def process_deposit_amount(message):
     chat_id = message.chat.id
     
-    # Сброс при /start
+    # Обработка сброса
     if message.text and message.text.lower().startswith('/start'):
         bot.clear_step_handler_by_chat_id(chat_id)
         start(message)
@@ -257,12 +225,14 @@ def process_deposit_amount(message):
             raise ValueError("Сумма меньше минимальной")
         
     except ValueError:
-        bot.send_message(
+        # ⚠️ Перерегистрируем хэндлер, чтобы пользователь мог повторно ввести сумму
+        error_msg = bot.send_message(
             chat_id, 
             f"🚫 *Ошибка ввода.* Пожалуйста, введите корректную сумму (минимум {MIN_DEPOSIT_AMOUNT} ₽) только цифрами (например, 500).",
-            parse_mode='Markdown',
-            reply_markup=get_account_markup()
+            parse_mode='Markdown'
         )
+        # Отправляем обратно в функцию ввода, пока не будет введено корректно
+        bot.register_next_step_handler(error_msg, process_deposit_amount)
         return
 
     # --- ОТВЕТ КЛИЕНТУ (С НОМЕРОМ КАРТЫ) ---
@@ -306,6 +276,8 @@ def process_deposit_amount(message):
         reply_markup=markup,
         parse_mode='Markdown'
     )
+    # Удаляем сообщение с введенной суммой, чтобы не засорять чат
+    safe_delete_message(chat_id, message.message_id)
 
 
 # --- ФУНКЦИИ ОБРАБОТКИ ЗАКАЗА (без изменений) ---
@@ -514,7 +486,7 @@ def callback_inline(call):
         "🔥 _Закажите накрутку ПФ прямо сейчас и наблюдайте, как Ваши объявления поднимаются в ТОП!_"
     )
     
-    # Очищаем хэндлер только если это не связано с продолжением действия
+    # Очищаем хэндлер только при навигации (чтобы не мешать process_deposit_amount)
     if call.data in ['back_to_main_menu', 'my_account', 'faq', 'promocodes', 'back_to_duration']:
         bot.clear_step_handler_by_chat_id(chat_id)
 
@@ -570,8 +542,7 @@ def callback_inline(call):
         account_key = call.data.replace('account_', '')
         
         if account_key == 'deposit':
-            safe_delete_message(chat_id, message_id)
-            # ⚠️ Убеждаемся, что передаем правильный объект для регистрации хэндлера
+            # Удаляем старое сообщение (меню аккаунта) и вызываем функцию запроса суммы
             request_deposit_amount(call.message)
             return
         
