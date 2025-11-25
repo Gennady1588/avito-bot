@@ -1160,4 +1160,3 @@ if __name__ == '__main__':
     # ⚠️ Убедитесь, что 'your-fallback-url' заменено на ваш реальный домен
     bot.set_webhook(url=f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'your-fallback-url')}/{TOKEN}")
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
- 
