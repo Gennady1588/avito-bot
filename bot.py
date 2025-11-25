@@ -20,8 +20,9 @@ MANAGER_USERNAME = "Hiluxe56"
 YOUR_CARD_NUMBER = "2204320348572225" 
 MIN_DEPOSIT_AMOUNT = 400
 
-# Цены и длительность (без изменений)
+# Цены и длительность
 PRICE_50_PF_DAILY = 799 
+PRICE_AVITO_REVIEW = 350 # <--- ВАША ЦЕНА ЗА 1 ОТЗЫВ
 
 DURATION_DAYS = {
     '1d': 1, '2d': 2, '3d': 3, 
@@ -71,13 +72,16 @@ def get_user_balance(user_id):
         
     return round(user_balances[user_id], 2)
 
-# --- ФУНКЦИИ КЛАВИАТУР (без изменений) ---
+# --- ФУНКЦИИ КЛАВИАТУР ---
 
 def get_main_menu_markup():
     markup = telebot.types.InlineKeyboardMarkup()
     markup.row(
         telebot.types.InlineKeyboardButton(text='🚀 Заказать ПФ', callback_data='order_pf'),
         telebot.types.InlineKeyboardButton(text='🚪 Личный кабинет', callback_data='my_account')
+    )
+    markup.row(
+        telebot.types.InlineKeyboardButton(text='⭐ Добавить отзыв (от 1 шт)', callback_data='order_review')
     )
     markup.row(
         telebot.types.InlineKeyboardButton(text='💬 FAQ / Кейсы', callback_data='faq'),
@@ -176,7 +180,7 @@ def request_deposit_amount(message):
 
     deposit_request_text = (
         "💳 *Пополнить баланс*\n\n"
-        f"❗️ Минимальная сумма пополнения - *{MIN_DEPOSIT_AMOUNT} ₽*\n\n"
+        f"❗️ Минимальная сумма пополнения - *{MIN_DEPOSIT_AMOUNT} ₽* \n\n"
         "Введите желаемую сумму пополнения:"
     )
     
@@ -318,8 +322,7 @@ def process_deposit_amount(message):
             pass # Если не удалось отправить ни клиенту, ни админу - ничего не поделаешь.
 
 
-# --- ФУНКЦИИ ОБРАБОТКИ ЗАКАЗА (без изменений) ---
-# ... (Остальной код остался без изменений)
+# --- ФУНКЦИИ ОБРАБОТКИ ЗАКАЗА ПФ ---
 
 def request_links(message):
     """Проверяет баланс и запрашивает ссылки, если средств достаточно."""
@@ -468,6 +471,219 @@ def process_links_and_send_order(message):
     user_data[chat_id]['pf_count'] = None
 
 
+# --- НОВЫЕ ФУНКЦИИ ОБРАБОТКИ ЗАКАЗА ОТЗЫВА ---
+
+def request_review_quantity(message):
+    """Шаг 1: Запрашивает количество отзывов."""
+    chat_id = message.chat.id
+    
+    bot.clear_step_handler_by_chat_id(chat_id) 
+
+    review_request_text = (
+        "⭐ *Заказ отзыва на Авито*\n\n"
+        f"Цена за 1 отзыв: *{PRICE_AVITO_REVIEW} ₽*.\n"
+        "Введите желаемое *количество* отзывов (от 1 шт):"
+    )
+    
+    markup = telebot.types.InlineKeyboardMarkup()
+    markup.row(
+        telebot.types.InlineKeyboardButton(text='🔙 Отмена / Назад', callback_data='back_to_main_menu')
+    )
+    
+    # Удаляем сообщение, которое инициировало этот запрос
+    safe_delete_message(chat_id, message.message_id) 
+    
+    sent_msg = bot.send_message(
+        chat_id, 
+        review_request_text, 
+        reply_markup=markup, 
+        parse_mode='Markdown'
+    )
+    
+    bot.register_next_step_handler(sent_msg, process_review_quantity)
+
+
+def process_review_quantity(message):
+    """Шаг 2: Обрабатывает количество, проверяет баланс и переходит к деталям."""
+    chat_id = message.chat.id
+    
+    safe_delete_message(chat_id, message.message_id) 
+    
+    if message.text and message.text.lower().startswith('/start'):
+        bot.clear_step_handler_by_chat_id(chat_id)
+        start(message)
+        return
+    
+    if not message.text:
+        bot.send_message(
+            chat_id, 
+            "🚫 *Ошибка ввода.* Пожалуйста, введите количество *цифрами*.",
+            parse_mode='Markdown'
+        )
+        request_review_quantity(type('obj', (object,), {'chat': type('chat', (object,), {'id': chat_id}), 'message_id': None})())
+        return
+
+    review_count_text = message.text.strip()
+    count = 0
+
+    try:
+        cleaned_text = re.sub(r'[^\d]', '', review_count_text)
+        count = int(cleaned_text)
+        
+        if count < 1:
+            raise ValueError("Количество меньше минимального")
+        
+    except ValueError:
+        bot.send_message(
+            chat_id, 
+            f"🚫 *Ошибка ввода.* Пожалуйста, введите корректное количество отзывов (минимум 1).",
+            parse_mode='Markdown'
+        )
+        request_review_quantity(type('obj', (object,), {'chat': type('chat', (object,), {'id': chat_id}), 'message_id': None})())
+        return
+
+    # Расчет цены
+    total_price = count * PRICE_AVITO_REVIEW
+    current_balance = get_user_balance(chat_id)
+    
+    if current_balance < total_price:
+        required = round(total_price - current_balance, 2)
+        
+        insufficient_funds_text = (
+            "❌ *Недостаточно средств!*\n\n"
+            f"Стоимость {count} отзывов: *{int(total_price)} ₽*\n"
+            f"Ваш баланс: *{current_balance} ₽*\n"
+            f"Необходимо пополнить: *{required} ₽*\n\n"
+            "Пожалуйста, пополните баланс в разделе 'Личный кабинет'."
+        )
+        
+        bot.send_message(
+            chat_id, 
+            insufficient_funds_text,
+            reply_markup=get_account_markup(),
+            parse_mode='Markdown'
+        )
+        return
+
+    # Сохраняем данные для следующего шага
+    user_data[chat_id]['review_count'] = count
+    user_data[chat_id]['review_price'] = total_price
+    
+    # Переход к запросу деталей
+    request_review_details(chat_id, count, total_price)
+
+
+def request_review_details(chat_id, count, price):
+    """Шаг 3: Запрашивает ссылку и текст отзыва."""
+    
+    details_request_text = (
+        f"✅ *Заказ {count} отзыв(а/ов) на {price} ₽*\n\n"
+        "Отправьте следующую информацию *одним* сообщением:\n\n"
+        "1. *Ссылка* на профиль Авито, куда нужно добавить отзыв.\n"
+        "2. *Текст* отзыва (или тексты, если их несколько, разделенные пустой строкой).\n\n"
+        "🔗 *Формат сообщения:*\n"
+        "`[Ссылка на профиль]`\n"
+        "`[Текст отзыва 1]`\n"
+        "`[Текст отзыва 2 (если есть)]`"
+    )
+    
+    markup = telebot.types.InlineKeyboardMarkup()
+    markup.row(
+        telebot.types.InlineKeyboardButton(text='🔙 Отмена / Назад', callback_data='back_to_main_menu')
+    )
+    
+    sent_msg = bot.send_message(
+        chat_id, 
+        details_request_text, 
+        reply_markup=markup, 
+        parse_mode='Markdown'
+    )
+    
+    user_data[chat_id]['awaiting_review_details_msg_id'] = sent_msg.message_id
+    
+    bot.register_next_step_handler(sent_msg, process_review_order)
+
+
+def process_review_order(message):
+    """Шаг 4: Финализация заказа отзыва, списание и отправка админу."""
+    chat_id = message.chat.id
+    
+    if 'awaiting_review_details_msg_id' in user_data.get(chat_id, {}):
+        safe_delete_message(chat_id, user_data[chat_id]['awaiting_review_details_msg_id'])
+        del user_data[chat_id]['awaiting_review_details_msg_id']
+    
+    if not message.text:
+        bot.send_message(
+            chat_id, 
+            "🚫 *Ошибка ввода.* Пожалуйста, отправьте ссылку и текст отзыва в виде *текста*.",
+            parse_mode='Markdown'
+        )
+        # Возвращаем в главное меню
+        bot.send_message(chat_id, "Пожалуйста, попробуйте заказать отзыв снова.", reply_markup=get_main_menu_markup())
+        return
+        
+    review_details = message.text
+    count = user_data[chat_id].get('review_count', 0)
+    total_price = user_data[chat_id].get('review_price', 0)
+
+    paid = False
+    balance_status = ""
+    
+    # Списание средств
+    if get_user_balance(chat_id) >= total_price and total_price > 0:
+        user_balances[chat_id] -= total_price
+        user_balances[chat_id] = round(user_balances[chat_id], 2)
+        balance_status = f"*Списано {int(total_price)} ₽*. Новый баланс: *{get_user_balance(chat_id)} ₽*."
+        paid = True
+    else:
+        balance_status = "❌ *Ошибка списания.* Недостаточно средств или цена заказа 0 ₽. Заказ отменен."
+
+    # СВОДКА ДЛЯ АДМИНИСТРАТОРА (со ссылкой/текстом)
+    order_summary_for_admin = (
+        "⭐ *НОВЫЙ ЗАКАЗ ОТЗЫВА НА АВИТО* ⭐\n\n"
+        f"Пользователь: @{message.from_user.username or 'без_юзернейма'} (ID: `{chat_id}`)\n"
+        f"Сумма заказа: *{int(total_price)} ₽*\n"
+        f"Статус оплаты: {'✅ Оплачен' if paid else '❌ Не оплачен (Ошибка)'}\n"
+        f"Количество отзывов: *{count}*\n"
+        "--- ДЕТАЛИ ЗАКАЗА ---\n"
+        f"{review_details}\n"
+        "------------------------------\n"
+        "Для ответа клиенту используйте реплай на это сообщение."
+    )
+    
+    bot.send_message(
+        OWNER_ID, 
+        order_summary_for_admin, 
+        parse_mode='Markdown'
+    )
+    
+    if paid:
+        confirmation_text = (
+            f"✅ *Ваш заказ на отзыв(ы) принят и оплачен!*\n\n" 
+            f"Стоимость: *{int(total_price)} ₽*. {balance_status}\n\n"
+            "Менеджер проверит детали и запустит выполнение. Вам придет оповещение о завершении.\n\n"
+            "⏳ *Ожидайте...*"
+        )
+    else:
+        confirmation_text = (
+            "❌ *Заказ отменен из-за нехватки средств или ошибки.*\n\n"
+            "Пожалуйста, пополните баланс и повторите заказ."
+        )
+
+    safe_delete_message(chat_id, message.message_id)
+    
+    bot.send_message(
+        chat_id, 
+        confirmation_text,
+        reply_markup=get_main_menu_markup(),
+        parse_mode='Markdown'
+    )
+    
+    # Очистка данных
+    if 'review_count' in user_data.get(chat_id, {}): del user_data[chat_id]['review_count']
+    if 'review_price' in user_data.get(chat_id, {}): del user_data[chat_id]['review_price']
+
+
 # --- ОСНОВНЫЕ ОБРАБОТЧИКИ ---
 
 @bot.message_handler(commands=['start'])
@@ -525,7 +741,7 @@ def callback_inline(call):
         "🔥 _Закажите накрутку ПФ прямо сейчас и наблюдайте, как Ваши объявления поднимаются в ТОП!_"
     )
     
-    # Очищаем хэндлер только при навигации (чтобы не мешать process_deposit_amount)
+    # Очищаем хэндлер только при навигации (чтобы не мешать степ-хэндлерам)
     if call.data in ['back_to_main_menu', 'my_account', 'faq', 'promocodes', 'back_to_duration']:
         bot.clear_step_handler_by_chat_id(chat_id)
 
@@ -581,14 +797,20 @@ def callback_inline(call):
         account_key = call.data.replace('account_', '')
         
         if account_key == 'deposit':
-            # ⚠️ Вызываем функцию запроса суммы, используя call.message как аргумент
+            # ⚠️ Вызываем функцию запроса суммы
             request_deposit_amount(call.message)
             return
         
         if account_key in ['orders', 'partner']:
             bot.send_message(chat_id, f"Раздел '{account_key.capitalize()}' временно недоступен или находится в разработке.", reply_markup=get_account_markup())
             
-    # (Остальные обработчики колбэков оставлены без изменений)
+    # --- НОВЫЙ ОБРАБОТЧИК ДЛЯ ЗАКАЗА ОТЗЫВА ---
+    elif call.data == 'order_review':
+        safe_delete_message(chat_id, message_id)
+        request_review_quantity(call.message)
+        return
+    # -------------------------------------------
+            
     elif call.data == 'faq':
         faq_text = "Выберите интересующий Вас раздел:"
         try:
@@ -718,21 +940,31 @@ def client_msg(m):
     )
 
 
-# --- ОБРАБОТЧИК ОТВЕТОВ АДМИНИСТРАТОРА (без изменений) ---
+# --- ОБРАБОТЧИК ОТВЕТОВ АДМИНИСТРАТОРА (УСИЛЕННЫЙ И ИСПРАВЛЕННЫЙ) ---
 @bot.message_handler(func=lambda m: m.chat.id == OWNER_ID and m.reply_to_message)
 def admin_reply(m):
     reply_text = m.reply_to_message.text
     
     try:
+        # 1. Попытка найти ID клиента в тексте, на который отвечаем (наиболее надежный способ)
         client_id_match = re.search(r'ID: `(\d+)`', reply_text)
         client_id = 0
         if client_id_match:
             client_id = int(client_id_match.group(1))
 
         if client_id == 0:
-            raise ValueError("ID клиента не найден.")
+            # 2. Если ID не найден, уведомляем администратора и прерываем
+            bot.send_message(
+                OWNER_ID, 
+                "❌ *ОШИБКА: ID клиента не найден!*\n\n"
+                "Вы должны ответить реплаем на исходное уведомление о заказе/сообщении, "
+                "где четко указан *ID клиента* в формате: `(ID: 123456789)`.",
+                parse_mode='Markdown'
+            )
+            return
 
-        if m.text.lower().startswith('/add_balance'): 
+        # --- ОБРАБОТКА КОМАНДЫ ПОПОЛНЕНИЯ БАЛАНСА ---
+        if m.text and m.text.lower().startswith('/add_balance'): 
             
             parts = m.text.split()
             if len(parts) < 2:
@@ -748,15 +980,22 @@ def admin_reply(m):
                     user_balances[client_id] = get_user_balance(client_id) + amount_to_add
                     new_balance = user_balances[client_id]
                     
-                    bot.send_message(
-                        client_id, 
-                        f"✅ *Баланс пополнен!* 🎉\n\n" 
-                        f"На счет зачислено *{amount_to_add} ₽*.\n"
-                        f"Текущий баланс: *{new_balance} ₽*.", 
-                        parse_mode='Markdown',
-                        reply_markup=get_main_menu_markup()
-                    )
-                    bot.send_message(OWNER_ID, f"✅ Баланс клиента {client_id} пополнен на {amount_to_add} ₽. Новый баланс: {new_balance} ₽.")
+                    # Уведомление КЛИЕНТА
+                    try:
+                        bot.send_message(
+                            client_id, 
+                            f"✅ *Баланс пополнен!* 🎉\n\n" 
+                            f"На счет зачислено *{amount_to_add} ₽*.\n"
+                            f"Текущий баланс: *{new_balance} ₽*.", 
+                            parse_mode='Markdown',
+                            reply_markup=get_main_menu_markup()
+                        )
+                        # Уведомление АДМИНИСТРАТОРА об успехе
+                        bot.send_message(OWNER_ID, f"✅ Баланс клиента `{client_id}` пополнен на {amount_to_add} ₽. Новый баланс: {new_balance} ₽.")
+                    except Exception as client_send_e:
+                        # Уведомление АДМИНИСТРАТОРА о неудаче
+                        bot.send_message(OWNER_ID, f"⚠️ *Баланс клиента `{client_id}` пополнен в базе*, но сообщение *не отправлено* (возможно, клиент заблокировал бота). Сумма: {amount_to_add} ₽. Ошибка: `{client_send_e}`", parse_mode='Markdown')
+                    
                     return 
                 else:
                     bot.send_message(OWNER_ID, "❌ *Ошибка.* Сумма должна быть положительной.", parse_mode='Markdown')
@@ -765,9 +1004,13 @@ def admin_reply(m):
             except ValueError:
                 bot.send_message(OWNER_ID, "❌ *Ошибка.* Некорректный формат суммы. Формат: `/add_balance 1000`", parse_mode='Markdown')
                 return
-                
-        bot.send_message(client_id, f"🧑‍💻 *Ответ менеджера:*\n\n{m.text}", parse_mode='Markdown')
-        bot.send_message(OWNER_ID, "Ответ отправлен клиенту.")
+        
+        # --- ОТПРАВКА ОБЫЧНОГО ОТВЕТА ---
+        try:
+            bot.send_message(client_id, f"🧑‍💻 *Ответ менеджера:*\n\n{m.text}", parse_mode='Markdown')
+            bot.send_message(OWNER_ID, "✅ Ответ успешно отправлен клиенту.")
+        except Exception as send_e:
+            bot.send_message(OWNER_ID, f"❌ *ОШИБКА ОТПРАВКИ КЛИЕНТУ* `{client_id}`:\n\nНе удалось отправить ответ клиенту. Возможно, он заблокировал бота. Ошибка: `{send_e}`", parse_mode='Markdown')
         
     except Exception as e:
         bot.send_message(OWNER_ID, f"🚨 *КРИТИЧЕСКАЯ ОШИБКА* при обработке реплая:\n\n`{e}`\n\nСообщение: {m.text}", parse_mode='Markdown')
