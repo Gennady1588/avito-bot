@@ -251,12 +251,13 @@ def process_deposit_amount(message):
     
     safe_delete_message(chat_id, message.message_id) 
     
+    # Проверка на команды и отмену
     if message.text and message.text.lower().startswith('/start'):
         bot.clear_step_handler_by_chat_id(chat_id)
         start(message)
         return
     
-    if message.content_type == 'text' and message.text == '🔙 Отмена / Назад':
+    if message.content_type == 'text' and message.text.lower() in ['🔙 отмена / назад', 'отмена']:
         bot.clear_step_handler_by_chat_id(chat_id)
         start(message) 
         return
@@ -295,14 +296,14 @@ def process_deposit_amount(message):
     safe_card = escape_markdown(YOUR_CARD_NUMBER)
     safe_manager_username = escape_markdown(MANAGER_USERNAME)
 
-    # --- ОТВЕТ КЛИЕНТУ (С НОМЕРОМ КАРТЫ) ---
+    # --- ОТВЕТ КЛИЕНТУ (С НОМЕРОМ КАРТЫ) - ДОРАБОТАННЫЙ ТЕКСТ ---
     payment_instruction = (
-        f"✅ *Ваш запрос на пополнение на {safe_amount} ₽ принят\!*\n\n"
-        "Для оплаты переведите *ТОЧНО* эту сумму на карту:\n"
+        f"✅ *Запрос на {safe_amount} ₽ принят\!*\n\n"
+        "1\. *Переведите ТОЧНО эту сумму* на карту:\n"
         f"💳 **`{safe_card}`**\n\n" 
-        "❗️ *Обязательно переводите ТОЧНО эту сумму\. Менеджер вручную "
-        "проверит поступление и зачислит средства\.*\n\n"
-        f"Для подтверждения оплаты напишите нашему менеджеру: **@{safe_manager_username}**"
+        "2\. *После перевода* свяжитесь с менеджером, чтобы он проверил поступление и зачислил средства\.\n"
+        f"Менеджер: **@{safe_manager_username}**\n\n"
+        "❗️ *ВНИМАНИЕ: Менеджер зачисляет средства вручную\. Это может занять от 1 до 5 минут\.*\n"
     )
     
     markup = telebot.types.InlineKeyboardMarkup()
@@ -345,6 +346,7 @@ def process_deposit_amount(message):
             parse_mode='MarkdownV2'
         )
     except Exception as e:
+        # Запасной текст на случай ошибки
         fallback_text = (
             f"❌ Критическая ошибка\. Произошел сбой при отправке платежных данных\. "
             f"Ваш запрос на {safe_amount} ₽ сохранен\. "
@@ -849,7 +851,7 @@ def callback_inline(call):
             bot.send_message(chat_id, main_menu_text, reply_markup=get_main_menu_markup(), parse_mode='MarkdownV2')
             
     elif call.data == 'my_account':
-        # --- ИСПРАВЛЕННЫЙ БЛОК (Версия 4.2 - ФИНАЛЬНЫЙ ФИКС MarkdownV2) ---
+        # --- БЛОК ЛИЧНОГО КАБИНЕТА С ФИНАЛЬНЫМИ ИСПРАВЛЕНИЯМИ ---
         
         balance = get_user_balance(chat_id)
         referral_link = f"https://t.me/avitoup1_bot?start={chat_id}" 
@@ -1155,6 +1157,6 @@ def webhook():
 
 if __name__ == '__main__':
     bot.remove_webhook()
-    # ⚠️ Убедитесь, что 'your-fallback-url' заменено на ваш реальный домен, если вы не используете Render
+    # ⚠️ Убедитесь, что 'your-fallback-url' заменено на ваш реальный домен
     bot.set_webhook(url=f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'your-fallback-url')}/{TOKEN}")
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
