@@ -22,7 +22,7 @@ MIN_DEPOSIT_AMOUNT = 400
 
 # Цены и длительность
 PRICE_50_PF_DAILY = 799 
-PRICE_AVITO_REVIEW = 350 # <--- ВАША ЦЕНА ЗА 1 ОТЗЫВ
+PRICE_AVITO_REVIEW = 350 
 
 DURATION_DAYS = {
     '1d': 1, '2d': 2, '3d': 3, 
@@ -319,7 +319,7 @@ def process_deposit_amount(message):
                 parse_mode='Markdown'
             )
         except Exception:
-            pass # Если не удалось отправить ни клиенту, ни админу - ничего не поделаешь.
+            pass 
 
 
 # --- ФУНКЦИИ ОБРАБОТКИ ЗАКАЗА ПФ ---
@@ -760,11 +760,12 @@ def callback_inline(call):
             bot.send_message(chat_id, main_menu_text, reply_markup=get_main_menu_markup(), parse_mode='Markdown')
             
     elif call.data == 'my_account':
+        # --- ИСПРАВЛЕННЫЙ БЛОК ДЛЯ ИЗБЕЖАНИЯ ОШИБКИ "message is not modified" ---
+        
         balance = get_user_balance(chat_id)
         referral_link = f"https://t.me/avitoup1_bot?start={chat_id}" 
         referrals_count = 0 
         
-        # ЗАМЕНА: Avitounlock
         account_text = (
             "🚪 *Личный кабинет*\n\n"
             f"Ваш баланс: *{balance}₽* \n"
@@ -776,28 +777,31 @@ def callback_inline(call):
             "Связь с создателем **@Avitounlock**"
         )
         
+        # Принудительное удаление старого сообщения, чтобы избежать ошибки редактирования
+        safe_delete_message(chat_id, message_id)
+        
         try:
-            bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=message_id,
-                text=account_text,
-                reply_markup=get_account_markup(),
-                parse_mode='Markdown'
-            )
-        except Exception:
-            safe_delete_message(chat_id, message_id)
+            # Отправляем новое сообщение вместо редактирования
             bot.send_message(
                 chat_id, 
                 account_text, 
                 reply_markup=get_account_markup(),
                 parse_mode='Markdown'
             )
+        except Exception as e:
+            bot.send_message(
+                chat_id, 
+                f"❌ Критическая ошибка при открытии Личного кабинета: {e}",
+                reply_markup=get_main_menu_markup()
+            )
+        # ------------------------------------------------------------------------
 
     elif call.data.startswith('account_'):
         account_key = call.data.replace('account_', '')
         
         if account_key == 'deposit':
             # ⚠️ Вызываем функцию запроса суммы
+            safe_delete_message(chat_id, message_id) # Удаляем старое меню аккаунта
             request_deposit_amount(call.message)
             return
         
