@@ -5,8 +5,9 @@ import re
 
 # --- КОНФИГУРАЦИЯ БОТА И СЕРВЕРА ---
 # ВАЖНО: Убедитесь, что TOKEN и OWNER_ID установлены как переменные окружения
-TOKEN = os.environ.get('TOKEN', 'YOUR_BOT_TOKEN_HERE') 
-OWNER_ID = int(os.environ.get('OWNER_ID', 123456789)) # Ваш ID 
+# Данные внесены по запросу пользователя:
+TOKEN = '8216604919:AAFLW0fNyp97RfgPmo7zFvUdIe3XLtR-EJg' 
+OWNER_ID = 1641571790 # ID владельца 
 
 # Инициализация бота
 bot = telebot.TeleBot(TOKEN)
@@ -116,12 +117,58 @@ def get_account_markup():
         telebot.types.InlineKeyboardButton(text='🔙 Назад', callback_data='back_to_main_menu')
     )
     return markup
+    
+def get_duration_markup():
+    markup = telebot.types.InlineKeyboardMarkup()
+    markup.row(
+        telebot.types.InlineKeyboardButton(text=DURATION_NAMES['1d'], callback_data='duration_1d'),
+        telebot.types.InlineKeyboardButton(text=DURATION_NAMES['3d'], callback_data='duration_3d'),
+        telebot.types.InlineKeyboardButton(text=DURATION_NAMES['7d'], callback_data='duration_7d')
+    )
+    markup.row(
+        telebot.types.InlineKeyboardButton(text=DURATION_NAMES['30d'], callback_data='duration_30d')
+    )
+    markup.row(
+        telebot.types.InlineKeyboardButton(text='🔙 Назад', callback_data='back_to_main_menu')
+    )
+    return markup
+
+def get_pf_count_markup(duration_key):
+    total_price_50 = calculate_price(duration_key, 50)
+    total_price_100 = calculate_price(duration_key, 100)
+    
+    markup = telebot.types.InlineKeyboardMarkup()
+    markup.row(
+        telebot.types.InlineKeyboardButton(text=f'50 ПФ ({int(total_price_50)} ₽)', callback_data='pf_count_50')
+    )
+    markup.row(
+        telebot.types.InlineKeyboardButton(text=f'100 ПФ ({int(total_price_100)} ₽)', callback_data='pf_count_100')
+    )
+    markup.row(
+        telebot.types.InlineKeyboardButton(text='🔙 Назад к сроку', callback_data='back_to_duration')
+    )
+    return markup
 
 def get_deposit_cancel_markup():
     """Отдельная кнопка отмены для пошаговых функций."""
     markup = telebot.types.InlineKeyboardMarkup()
     markup.row(
         telebot.types.InlineKeyboardButton(text='🔙 Отмена / Назад в меню', callback_data='back_to_main_menu')
+    )
+    return markup
+    
+def get_faq_markup():
+    markup = telebot.types.InlineKeyboardMarkup()
+    markup.row(
+        telebot.types.InlineKeyboardButton(text='Как работают ПФ?', url='https://t.me/Avitounlock/2'),
+        telebot.types.InlineKeyboardButton(text='Иксы не работают!', url='https://t.me/Avitounlock/1')
+    )
+    markup.row(
+        telebot.types.InlineKeyboardButton(text='Кейсы и отзывы', url='https://t.me/Avitounlock/12'),
+        telebot.types.InlineKeyboardButton(text='Вопросы и ответы', callback_data='faq_qna')
+    )
+    markup.row(
+        telebot.types.InlineKeyboardButton(text='🔙 Назад', callback_data='back_to_main_menu')
     )
     return markup
 
