@@ -53,7 +53,6 @@ def proc_dep(m):
 @bot.message_handler(func=lambda m: m.chat.id == OWNER_ID and m.reply_to_message)
 def admin_reply(m):
     # m.reply_to_message — это сообщение, на которое ответил админ.
-    # Нам нужно найти ID чата пользователя и ID сообщения, на которое нужно ответить.
     
     client_chat_id = None
     client_message_id = None
@@ -67,29 +66,30 @@ def admin_reply(m):
         client_chat_id = m.reply_to_message.chat.id
         client_message_id = m.reply_to_message.message_id
     
-    # 3. Запасной вариант: Ищем ID клиента в тексте реплая (например, в логе "ЗАПРОС НА ПОПОЛНЕНИЕ (ID: ...)")
+    # 3. Запасной вариант: Ищем ID клиента в тексте реплая (для логов типа "ЗАПРОС НА ПОПОЛНЕНИЕ")
     if not client_chat_id or client_chat_id == OWNER_ID:
         text = m.reply_to_message.text or ""
-        # Ищем ID в формате "ID: 123456789"
-        client_id_match = re.search(r'ID: (\d{8,12})', text) 
+        # Улучшенная регулярка для поиска ID в формате "(ID: 123456789)"
+        client_id_match = re.search(r'\(ID:\s*(\d{8,12})\)', text) 
         if client_id_match:
             client_chat_id = int(client_id_match.group(1))
-            # В этом случае message_id неизвестен, реплай не получится
-            client_message_id = None
+            # В этом случае message_id неизвестен, реплай на сообщение клиента не получится, 
+            # но сообщение будет отправлено в его чат.
+            client_message_id = None 
         else:
-             bot.reply_to(m, "Не удалось найти ID клиента для ответа.")
-             return # Прерываем, так как не знаем, кому отвечать
+             bot.reply_to(m, "❌ ОШИБКА: ID клиента не найден в тексте реплая!")
+             return
 
     try:
         if client_message_id:
-            # Отправляем сообщение администратора как реплай
+            # Отправляем сообщение администратора как реплай на сообщение клиента
             bot.send_message(
                 chat_id=client_chat_id,
-                text=m.text, # Используем текст сообщения админа
+                text=m.text,
                 reply_to_message_id=client_message_id
             )
         else:
-            # Если message_id не найден, просто отправляем сообщение
+            # Если message_id не найден, просто отправляем сообщение в чат клиента
             bot.send_message(
                 chat_id=client_chat_id,
                 text=m.text
@@ -98,7 +98,8 @@ def admin_reply(m):
         bot.reply_to(m, f"Отправлено клиенту (ID: {client_chat_id}).")
 
     except Exception as e:
-        bot.reply_to(m, f"Ошибка при отправке: {e}")
+        # Ошибка, например, если клиент заблокировал бота
+        bot.reply_to(m, f"Ошибка при отправке: возможно, клиент заблокировал бота. Детали: {e}")
 
 @app.route(f'/{TOKEN}', methods=['POST'])
 def webhook():
@@ -109,6 +110,5 @@ def webhook():
     return '', 403
 
 if __name__ == '__main__':
-    print("Бот запущен. Для ответов клиентам используй реплай на их сообщения в чате с ботом.")
     bot.remove_webhook()
     bot.infinity_polling(none_stop=True)
