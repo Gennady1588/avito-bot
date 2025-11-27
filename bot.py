@@ -5,7 +5,7 @@ from html import escape
 
 # ========================= КОНФИГ =========================
 TOKEN = '8216604919:AAFLW0fNyp97RfgPmo7zVdIe3XLtR-EJg'
-OWNER_ID = 1641571790  # ← Твой ID
+OWNER_ID = 1641571790  # Твой ID
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
@@ -105,7 +105,7 @@ def deposit_process(m):
     k.add(telebot.types.InlineKeyboardButton("Связаться с менеджером", url=f"t.me/{MANAGER_USERNAME}"))
     bot.send_message(m.chat.id, text, parse_mode='Markdown', reply_markup=k)
 
-    # Уведомление админу — ID всегда в чистом виде
+    # Уведомление админу — ID в чистом формате
     admin_text = (
         "ЗАПРОС НА ПОПОЛНЕНИЕ\n\n"
         f"Пользователь: @{m.from_user.username or 'нет'}\n"
@@ -168,61 +168,94 @@ def followers_link(m):
         f"Заказ принят!\n*{qty}* подписчиков → *{price}₽*\nБаланс: *{get_balance(m.chat.id)}₽*",
         parse_mode='Markdown', reply_markup=main_menu())
 
-# ========================= ГЛАВНОЕ ИСПРАВЛЕНИЕ: АДМИН-ОТВЕТ =========================
+# ========================= АДМИН-ОТВЕТ С АВТОПОДСТАНОВКОЙ =========================
 @bot.message_handler(func=lambda m: m.chat.id == OWNER_ID and m.reply_to_message)
 def admin_reply(m):
     try:
-        text = (m.reply_to_message.text or m.reply_to_message.caption or "")
+        orig = m.reply_to_message
+        orig_text = (orig.text or orig.caption or "")
 
-        # СУПЕР-ПАРСЕР ID — ловит всё!
+        # Супер-парсер ID — ловит твой формат (ID: 7579757892)
         client_id = None
         for pattern in [
             r'ID клиента[:\s]*(\d+)',
             r'ID[:\s]*[:\s]*(\d+)',
             r'\(ID[:\s]*(\d+)\)',
             r'ID[:\s]*[`\'"]?(\d+)[`\'"]?',
-            r'(\d{8,12})'
+            r'Пользователь.*?(\d{8,12})',
+            r'(\d{8,12})'  # Последний запасной
         ]:
-            match = re.search(pattern, text)
+            match = re.search(pattern, orig_text)
             if match:
                 client_id = int(match.group(1))
                 break
 
         if not client_id:
-            bot.reply_to(m, "ID клиента не найден!\n\nОтветьте реплаем на сообщение бота, где указан ID.")
+            bot.reply_to(m, "ID не найден! Убедитесь, что отвечаете на уведомление бота.")
             return
 
-        # === ПОПОЛНЕНИЕ ===
-        if m.text and m.text.lstrip().startswith('/add_balance'):
+        # Если просто нажал "Ответить" (пустое сообщение) — авто подстановка
+        if not m.text or m.text.strip() == "":
+            # Ищем сумму в сообщении (например, 400)
+            amount_match = re.search(r'Сумма[:\s]*[:\s]*(\d+)|(\d+) ?₽', orig_text)
+            amount = amount_match.group(1) or amount_match.group(2) or "400"
+
+            # Удаляем пустой реплай и отправляем готовую команду
+            delete(OWNER_ID, m.message_id)
+            bot.send_message(
+                OWNER_ID,
+                f"/add_balance {amount}",  # ← Готовая команда, сумма из сообщения
+                reply_to_message_id=orig.message_id,
+                reply_markup=telebot.types.ForceReply(selective=True)  # Автоподстановка в поле ввода
+            )
+            return
+
+        # Если написал /add_balance — зачисляем (сумму можно изменить)
+        if m.text.strip().startswith("/add_balance"):
             try:
-                amount = float(m.text.split()[1])
-                if amount <= 0: raise ValueError
+                parts = m.text.strip().split()
+                amount = float(parts[1]) if len(parts) >= 2 else 0
+                if amount <= 0:
+                    raise ValueError
             except:
-                bot.reply_to(m, "Пример: `/add_balance 500`", parse_mode='Markdown')
+                bot.reply_to(m, "Правильно: `/add_balance 500`", parse_mode="Markdown")
                 return
 
             user_balances[client_id] = get_balance(client_id) + amount
 
             bot.send_message(client_id,
-                f"Баланс пополнен!\n+*{amount}₽*\nТекущий баланс: *{get_balance(client_id)}₽*",
-                parse_mode='Markdown', reply_markup=main_menu())
+                f"Баланс пополнен на *{amount}₽*\nТекущий баланс: *{get_balance(client_id)}₽*",
+                parse_mode="Markdown", reply_markup=main_menu())
 
             kb = telebot.types.InlineKeyboardMarkup()
             kb.add(telebot.types.InlineKeyboardButton("Написать клиенту", url=f"t.me/{bot.get_me().username}?start={client_id}"))
-            bot.reply_to(m, f"Зачислено +{amount}₽\nБаланс клиента: {get Zalget_balance(client_id)}₽", reply_markup=kb)
+            bot.reply_to(m, f"Зачислено +{amount}₽\nБаланс: {get_balance(client_id)}₽", reply_markup=kb)
             return
 
-        # === ОБЫЧНЫЙ ОТВЕТ ===
+        # Обычный ответ (текст, фото и т.д.) — на любое сообщение
+        caption = f"*Ответ менеджера:*\n\n{escape(m.text or m.caption or '')}"
+
         if m.text:
-            bot.send_message(client_id, f"*Ответ менеджера:*\n\n{escape(m.text)}", parse_mode='Markdown')
+            bot.send_message(client_id, caption, parse_mode="Markdown")
         elif m.photo:
-            bot.send_photo(client_id, m.photo[-1].file_id, caption=f"*Ответ менеджера:*\n\n{escape(m.caption or '')}", parse_mode='Markdown')
+            bot.send_photo(client_id, m.photo[-1].file_id, caption=caption, parse_mode="Markdown")
+        elif m.video:
+            bot.send_video(client_id, m.video.file_id, caption=caption, parse_mode="Markdown")
+        elif m.document:
+            bot.send_document(client_id, m.document.file_id, caption=caption, parse_mode="Markdown")
         elif m.voice:
             bot.send_voice(client_id, m.voice.file_id)
+            if m.caption:
+                bot.send_message(client_id, caption, parse_mode="Markdown")
+        elif m.sticker:
+            bot.send_sticker(client_id, m.sticker.file_id)
+        else:
+            bot.reply_to(m, "Тип сообщения не поддерживается")
+            return
 
         kb = telebot.types.InlineKeyboardMarkup()
         kb.add(telebot.types.InlineKeyboardButton("Написать ещё", url=f"t.me/{bot.get_me().username}?start={client_id}"))
-        bot.reply_to(m, f"Отправлено клиенту {client_id}", reply_markup=kb)
+        bot.reply_to(m, f"Отправлено → ID {client_id}", reply_markup=kb)
 
     except Exception as e:
         bot.reply_to(m, f"Ошибка: {e}")
