@@ -51,53 +51,51 @@ def proc_dep(m):
         return bot.send_message(m.chat.id, "Минимум 400₽")
 
     bot.send_message(m.chat.id,
-        f"Переведи *{amount}₽* на карту `{YOUR_CARD_NUMBER}`\nПосле оплаты — нажми кнопку ниже",
+        f"Переведи *{amount}₽* на `{YOUR_CARD_NUMBER}`\nПосле оплаты — нажми кнопку",
         parse_mode='Markdown',
         reply_markup=telebot.types.InlineKeyboardMarkup().add(
             telebot.types.InlineKeyboardButton("Оплатил", url=f"t.me/{MANAGER_USERNAME}")))
 
+    # Теперь всегда один формат — с (ID: )
     admin_text = (
         f"ЗАПРОС НА ПОПОЛНЕНИЕ\n\n"
         f"Пользователь: @{m.from_user.username or 'нет'} (ID: {m.chat.id})\n"
-        f"Сумма: {amount}₽\n"
-        f"Карта: {YOUR_CARD_NUMBER}"
+        f"Желаемая сумма: {amount} ₽\n"
+        f"Карта для проверки: {YOUR_CARD_NUMBER}"
     )
     bot.send_message(OWNER_ID, admin_text)
 
-# ==================================================================
-# ГЛАВНОЕ — ПРОСТЫЕ ОТВЕТЫ БЕЗ КОМАНД И БЕЗ ID
-# ==================================================================
+# === ГЛАВНЫЙ ХЕНДЛЕР — РАБОТАЕТ НА ВСЕХ СТАРЫХ И НОВЫХ УВЕДОМЛЕНИЯХ ===
 @bot.message_handler(func=lambda m: m.chat.id == OWNER_ID and m.reply_to_message)
-def admin_just_reply(m):
-    orig_text = (m.reply_to_message.text or m.reply_to_message.caption or "")
+def admin_reply(m):
+    text = (m.reply_to_message.text or m.reply_to_message.caption or "")
 
-    # 100% парсер под ВСЕ твои форматы (включая (ID: 7579757892))
+    # Ловим ЛЮБОЙ возможный ID в истории твоего бота
     client_id = None
     patterns = [
-        r'\(ID:\s*(\d+)\)',           # ← твой точный формат
+        r'\(ID:\s*(\d+)\)',           # ← точно твой старый формат
         r'ID[:\s]*(\d+)',
         r'ID клиента[:\s]*(\d+)',
-        r'клиента[:\s]*(\d+)',
-        r'ID[=:]\s*(\d+)',
-        r'(\d{8,12})'
+        r'ID[:\s=]+\s*(\d+)',
+        r'(\d{8,12})'                 # запасной
     ]
     for p in patterns:
-        if match := re.search(p, orig_text):
+        if match := re.search(p, text):
             client_id = int(match.group(1))
             break
 
     if not client_id:
-        return bot.reply_to(m, "ID не найден в этом сообщении")
+        return bot.reply_to(m, "ID не найден")
 
-    # Если это пополнение и ты просто написал цифру — зачисляем
-    if "ПОПОЛНЕНИЕ" in orig_text.upper() and m.text.strip().isdigit():
+    # Если написал просто цифру на запрос пополнения — зачисляем
+    if "ПОПОЛНЕНИЕ" in text and m.text.strip().isdigit():
         amount = int(m.text.strip())
         user_balances[client_id] = get_balance(client_id) + amount
         bot.send_message(client_id, f"Баланс пополнен на *{amount}₽*\nТеперь: *{get_balance(client_id)}₽*", 
                          parse_mode='Markdown', reply_markup=main_menu())
         return bot.reply_to(m, f"Зачислено +{amount}₽")
 
-    # Обычный ответ — просто пересылаем
+    # Обычные сообщения
     if m.text:
         bot.send_message(client_id, m.text)
     elif m.photo:
@@ -110,14 +108,11 @@ def admin_just_reply(m):
         bot.send_document(client_id, m.document.file_id, caption=m.caption)
     elif m.sticker:
         bot.send_sticker(client_id, m.sticker.file_id)
-    else:
-        return bot.reply_to(m, "Отправлено")
 
     kb = telebot.types.InlineKeyboardMarkup()
     kb.add(telebot.types.InlineKeyboardButton("Написать ещё", url=f"t.me/{bot.get_me().username}?start={client_id}"))
-    bot.reply_to(m, "Отправлено клиенту", reply_markup=kb)
+    bot.reply_to(m, "Отправлено", reply_markup=kb)
 
-# ==================================================================
 @app.route(f'/{TOKEN}', methods=['POST'])
 def webhook():
     if request.headers.get('content-type') == 'application/json':
@@ -127,6 +122,6 @@ def webhook():
     return '', 403
 
 if __name__ == '__main__':
-    print("Бот запущен — теперь просто отвечай")
+    print("Бот запущен — теперь ВСЁ работает")
     bot.remove_webhook()
     bot.infinity_polling(none_stop=True)
