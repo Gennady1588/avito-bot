@@ -9,7 +9,6 @@ OWNER_ID = 1641571790 # ID Геннадия
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__) 
 
-# Используем словарь для хранения балансов (в реальном проекте используйте базу данных)
 user_balances = {} 
 MANAGER_USERNAME = "Hiluxe56"
 YOUR_CARD_NUMBER = "2204320348572225"
@@ -17,7 +16,7 @@ YOUR_CARD_NUMBER = "2204320348572225"
 def get_balance(uid):
     return user_balances.get(uid, 0)
 
-# ----------------- КНОПКИ КЛИЕНТА -----------------
+# ----------------- КНОПКИ И МЕНЮ -----------------
 
 def main_menu():
     k = telebot.types.InlineKeyboardMarkup()
@@ -29,7 +28,6 @@ def main_menu():
 @bot.message_handler(commands=['start'])
 def start(m):
     reply_markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
-    # Добавьте здесь кнопку "Заказать ПФ", если она есть в @avitoup1_bot
     reply_markup.add(telebot.types.KeyboardButton("👤 Кабинет"))
     bot.send_message(m.chat.id, "Avito ПФ Услуги 2025", reply_markup=reply_markup)
 
@@ -38,12 +36,6 @@ def show_account_from_button(m):
     k = telebot.types.InlineKeyboardMarkup()
     k.add(telebot.types.InlineKeyboardButton("Пополнить", callback_data="deposit"))
     bot.send_message(m.chat.id, f"Баланс: *{get_balance(m.chat.id)}₽*", parse_mode='Markdown', reply_markup=k)
-
-@bot.callback_query_handler(func=lambda c: c.data == "account")
-def acc(c):
-    k = telebot.types.InlineKeyboardMarkup()
-    k.add(telebot.types.InlineKeyboardButton("Пополнить", callback_data="deposit"))
-    bot.edit_message_text(f"Баланс: *{get_balance(c.from_user.id)}₽*", c.message.chat.id, c.message.message_id, parse_mode='Markdown', reply_markup=k)
 
 @bot.callback_query_handler(func=lambda c: c.data == "deposit")
 def dep(c):
@@ -61,8 +53,8 @@ def proc_dep(m):
                      reply_markup=telebot.types.InlineKeyboardMarkup().add(
                          telebot.types.InlineKeyboardButton("Оплатил", url=f"t.me/{MANAGER_USERNAME}")))
 
-    # ЛОГ ДЛЯ АДМИНА (ID БЕЗ СКОБОК ДЛЯ НАДЕЖНОСТИ)
-    admin_text = f"💰 ЗАПРОС НА ПОПОЛНЕНИЕ 💰\n\nПользователь: @{m.from_user.username or 'нет'} ID: {m.chat.id}\nЖелаемая сумма: {amount} ₽\nКарта для проверки: {YOUR_CARD_NUMBER}\n\n➡️ Необходимо проверить поступление: {amount} ₽\nОтветьте реплаем, чтобы подтвердить получение средств. Для зачисления используйте /add_balance {amount}"
+    # ЛОГ ДЛЯ АДМИНА: Указываем команду для начисления
+    admin_text = f"💰 ЗАПРОС НА ПОПОЛНЕНИЕ 💰\n\nПользователь: @{m.from_user.username or 'нет'} ID: {m.chat.id}\nЖелаемая сумма: {amount} ₽\nКарта для проверки: {YOUR_CARD_NUMBER}\n\n➡️ Начислить: /add {m.chat.id} {amount}"
     
     bot.send_message(OWNER_ID, admin_text)
 
@@ -72,71 +64,69 @@ def extract_client_id_from_text(text):
     """ Находит ID клиента в тексте сообщения: ищет 'ID: [цифры]' """
     if not text:
         return None
-    # АГРЕССИВНОЕ РЕГУЛЯРНОЕ ВЫРАЖЕНИЕ: Ищет "ID: " за которым следуют 8-12 цифр
+    # Агрессивный поиск ID
     match = re.search(r'ID:\s*(\d{8,12})', text) 
     if match:
         return int(match.group(1))
     return None
 
-# ----------------- ОБРАБОТЧИК АДМИНИСТРАТОРА (УНИФИЦИРОВАННЫЙ) -----------------
+# ----------------- ОБРАБОТЧИК АДМИНИСТРАТОРА: НАЧИСЛЕНИЕ (ЧЕРЕЗ КОМАНДУ) -----------------
+
+@bot.message_handler(commands=['add'], func=lambda m: m.chat.id == OWNER_ID)
+def add_balance_direct(m):
+    
+    parts = m.text.split()
+    if len(parts) != 3:
+        return bot.reply_to(m, "❌ ОШИБКА: Используйте формат /add {ID_клиента} {сумма}, например: /add 7579757892 400")
+
+    try:
+        client_chat_id = int(parts[1])
+        amount = int(parts[2])
+    except ValueError:
+        return bot.reply_to(m, "❌ ID клиента и сумма должны быть числами.")
+
+    # Начисление баланса
+    user_balances[client_chat_id] = user_balances.get(client_chat_id, 0) + amount
+    
+    # Отправка подтверждения администратору
+    bot.reply_to(m, f"✅ Баланс клиента (ID: {client_chat_id}) пополнен на {amount} ₽. Текущий баланс: {user_balances[client_chat_id]} ₽.")
+    
+    # Отправка уведомления клиенту
+    try:
+        bot.send_message(
+            chat_id=client_chat_id,
+            text=f"✅ Баланс пополнен на **{amount} ₽**. Ваш текущий баланс: **{user_balances[client_chat_id]} ₽**.",
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        bot.reply_to(m, f"⚠️ Баланс начислен, но не удалось уведомить клиента (ID: {client_chat_id}). Детали: {e}")
+            
+
+# ----------------- ОБРАБОТЧИК АДМИНИСТРАТОРА: ОТВЕТ НА СООБЩЕНИЕ (ЧЕРЕЗ РЕПЛАЙ) -----------------
 
 @bot.message_handler(func=lambda m: m.chat.id == OWNER_ID and m.reply_to_message)
-def admin_action_handler(m):
+def admin_reply_simple(m):
     
     replied_message_text = m.reply_to_message.text or ""
-    
-    # 1. ПЫТАЕМСЯ НАЙТИ ID В ТЕКСТЕ, НА КОТОРЫЙ ОТВЕЧАЕМ
     client_chat_id = extract_client_id_from_text(replied_message_text)
-    
+
     if not client_chat_id:
-        # Это должно срабатывать, только если ID действительно отсутствует
-        # или если бот не может прочитать текст.
-        return bot.reply_to(m, "❌ КРИТИЧЕСКАЯ ОШИБКА: ID клиента не найден. Убедитесь, что отвечаете реплаем на лог-сообщение, где четко указано 'ID: 123456789'.")
+        # Эта ошибка должна срабатывать только при неудаче чтения реплая
+        return bot.reply_to(m, "❌ ID клиента для пересылки ответа не найден. Ответьте на лог-сообщение, где указан ID.")
 
+    try:
+        # Отправляем сообщение администратора
+        bot.send_message(
+            chat_id=client_chat_id,
+            text=m.text 
+        )
+        bot.reply_to(m, f"✅ Сообщение '{m.text}' отправлено клиенту (ID: {client_chat_id}).")
 
-    # --- ЛОГИКА ДЛЯ /add_balance (Начисление средств) ---
-    if m.text and m.text.lower().startswith('/add_balance'):
-        
-        # 1. Извлекаем сумму
-        try:
-            # Удаляем все, кроме цифр, после команды
-            amount_str = re.sub(r'[{} ]', '', m.text.lower().replace('/add_balance', '', 1).strip())
-            amount = int(amount_str)
-        except:
-            return bot.reply_to(m, "❌ ОШИБКА ФОРМАТА: Используйте /add_balance 400 (только цифры).")
-
-        # 2. Начисление баланса
-        user_balances[client_chat_id] = user_balances.get(client_chat_id, 0) + amount
-        
-        # 3. Отправка подтверждения администратору
-        bot.reply_to(m, f"✅ Баланс клиента (ID: {client_chat_id}) пополнен на {amount} ₽. Текущий баланс: {user_balances[client_chat_id]} ₽.")
-        
-        # 4. Отправка уведомления клиенту
-        try:
-            bot.send_message(
-                chat_id=client_chat_id,
-                text=f"✅ Баланс пополнен на **{amount} ₽**. Ваш текущий баланс: **{user_balances[client_chat_id]} ₽**.",
-                parse_mode='Markdown'
-            )
-        except Exception as e:
-            bot.reply_to(m, f"⚠️ Баланс начислен, но не удалось уведомить клиента (ID: {client_chat_id}). Детали: {e}")
-            
-    # --- ЛОГИКА ДЛЯ ОБЫЧНОГО ОТВЕТА (ЛЮБОЙ ТЕКСТ) ---
-    else:
-        try:
-            # Отправляем сообщение администратора
-            bot.send_message(
-                chat_id=client_chat_id,
-                text=m.text 
-            )
-            bot.reply_to(m, f"✅ Сообщение '{m.text}' отправлено клиенту (ID: {client_chat_id}).")
-
-        except Exception as e:
-            bot.reply_to(m, f"⚠️ Ошибка при отправке. Возможно, клиент заблокировал бота. Детали: {e}")
+    except Exception as e:
+        bot.reply_to(m, f"⚠️ Ошибка при отправке. Возможно, клиент заблокировал бота. Детали: {e}")
 
 
 # ----------------- ЗАПУСК БОТА -----------------
-# Используем Long Polling для простоты
 if __name__ == '__main__':
     print("🤖 Бот запущен в режиме Long Polling. Отвечай реплаем на сообщения!")
     try:
