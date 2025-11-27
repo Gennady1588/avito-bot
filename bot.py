@@ -1,15 +1,15 @@
 from flask import Flask, request
 import telebot
 import re
-# Flask и request используются только для декоратора @app.route, 
-# но сама программа запускается через Long Polling.
+import time
 
 TOKEN = '8216604919:AAFLW0fNyp97RfgPmo7zVdIe3XLtR-EJg'
 OWNER_ID = 1641571790
 bot = telebot.TeleBot(TOKEN)
-app = Flask(__name__) # Используется ниже
+app = Flask(__name__)
 
-user_balances = {}
+# Используйте базу данных (например, SQLite), а не словарь, для реального проекта!
+user_balances = {} 
 MANAGER_USERNAME = "Hiluxe56"
 YOUR_CARD_NUMBER = "2204320348572225"
 
@@ -20,6 +20,8 @@ def main_menu():
     k = telebot.types.InlineKeyboardMarkup()
     k.add(telebot.types.InlineKeyboardButton("Личный кабинет", callback_data="account"))
     return k
+
+# ----------------- ОБРАБОТЧИКИ КЛИЕНТА -----------------
 
 @bot.message_handler(commands=['start'])
 def start(m):
@@ -47,10 +49,61 @@ def proc_dep(m):
                      reply_markup=telebot.types.InlineKeyboardMarkup().add(
                          telebot.types.InlineKeyboardButton("Оплатил", url=f"t.me/{MANAGER_USERNAME}")))
 
+    # Лог для администратора
     admin_text = f"💰 ЗАПРОС НА ПОПОЛНЕНИЕ 💰\n\nПользователь: @{m.from_user.username or 'нет'} (ID: {m.chat.id})\nЖелаемая сумма: {amount} ₽\nКарта для проверки: {YOUR_CARD_NUMBER}\n\n➡️ Необходимо проверить поступление: {amount} ₽\nОтветьте реплаем, чтобы подтвердить получение средств. Для зачисления используйте /add_balance {amount}"
     bot.send_message(OWNER_ID, admin_text)
 
-# ====== ФУНКЦИЯ ОТВЕТА АДМИНИСТРАТОРА (РАБОЧИЙ КОД) ======
+# ----------------- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ АДМИНИСТРАТОРА -----------------
+
+def find_client_id(message):
+    """Находит ID клиента из текста лога, даже если отвечают на реплай."""
+    text = message.text or ""
+    
+    # 1. Поиск в тексте текущего сообщения
+    client_id_match = re.search(r'\(ID:\s*(\d{8,12})\)', text)
+    
+    # 2. Если не найден, поиск в цитируемом сообщении
+    if not client_id_match and message.reply_to_message:
+         original_log_text = message.reply_to_message.text or ""
+         client_id_match = re.search(r'\(ID:\s*(\d{8,12})\)', original_log_text)
+         
+    return client_id_match
+
+# ----------------- ОБРАБОТЧИКИ АДМИНИСТРАТОРА -----------------
+
+# 1. ОБРАБОТЧИК ДЛЯ НАЧИСЛЕНИЯ БАЛАНСА (через команду)
+@bot.message_handler(commands=['add_balance'], func=lambda m: m.chat.id == OWNER_ID and m.reply_to_message)
+def add_balance_command(m):
+    try:
+        amount = int(m.text.split()[1])
+    except:
+        return bot.reply_to(m, "❌ ОШИБКА: Используйте формат /add_balance {сумма}")
+
+    client_id_match = find_client_id(m.reply_to_message)
+    
+    if client_id_match:
+        client_chat_id = int(client_id_match.group(1))
+        
+        # Начисление баланса
+        user_balances[client_chat_id] = user_balances.get(client_chat_id, 0) + amount
+        
+        # Отправка подтверждения администратору
+        bot.reply_to(m, f"✅ Баланс клиента (ID: {client_chat_id}) пополнен на {amount} ₽.")
+        
+        # Отправка уведомления клиенту
+        try:
+            bot.send_message(
+                chat_id=client_chat_id,
+                text=f"✅ Баланс пополнен на **{amount} ₽**. Ваш текущий баланс: **{user_balances[client_chat_id]} ₽**.",
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            bot.reply_to(m, f"⚠️ Баланс начислен, но не удалось уведомить клиента (ID: {client_chat_id}). Детали: {e}")
+            
+    else:
+        bot.reply_to(m, "❌ ID клиента не найден в сообщении, на которое вы отвечаете. Начисление отменено.")
+
+# 2. ОБРАБОТЧИК ДЛЯ ПРОСТОГО ТЕКСТОВОГО ОТВЕТА (без ID и команд)
 @bot.message_handler(func=lambda m: m.chat.id == OWNER_ID and m.reply_to_message)
 def admin_reply(m):
     
@@ -58,38 +111,28 @@ def admin_reply(m):
     client_message_id = None
     reply_to = m.reply_to_message
     
-    # 1. Приоритет: Если админ отвечает на ПЕРЕСЛАННОЕ сообщение
+    # Находим ID клиента, используя новую надежную функцию
+    client_id_match = find_client_id(reply_to)
+    
     if reply_to.forward_from:
         client_chat_id = reply_to.forward_from.id
         client_message_id = reply_to.forward_from_message_id
         
-    # 2. Если сообщение не пересылалось и оно пришло от пользователя
     elif reply_to.chat.id != OWNER_ID:
         client_chat_id = reply_to.chat.id
         client_message_id = reply_to.message_id
         
-    # 3. Запасной вариант: Ищем ID клиента в тексте реплая
-    if not client_chat_id or client_chat_id == OWNER_ID:
-        text = reply_to.text or ""
-        client_id_match = re.search(r'\(ID:\s*(\d{8,12})\)', text)
-
-        # 4. Проверяем, не является ли сообщение, на которое мы отвечаем, 
-        #    реплаем на другое сообщение (МАКСИМАЛЬНОЕ УЛУЧШЕНИЕ)
-        if not client_id_match and reply_to.reply_to_message:
-             original_log_text = reply_to.reply_to_message.text or ""
-             client_id_match = re.search(r'\(ID:\s*(\d{8,12})\)', original_log_text)
-             if client_id_match:
-                 client_message_id = reply_to.reply_to_message.message_id
-        
-        # Если ID найден
-        if client_id_match:
-            client_chat_id = int(client_id_match.group(1))
-        else:
-             # ЭТО НОВЫЙ ТЕКСТ ОШИБКИ, который вы должны увидеть, если ID не найдется:
-             bot.reply_to(m, "❌ КРИТИЧЕСКАЯ ОШИБКА: ID клиента не найден. Пожалуйста, ответьте на **самый первый лог-запрос**.")
-             return
+    elif client_id_match: # Используем ID, найденный в логе
+        client_chat_id = int(client_id_match.group(1))
+        # client_message_id остается None, если отвечаем на лог, и сообщение не будет реплаем
+    
+    if not client_chat_id:
+         # Это будет видно, только если не сработал ни один из методов поиска
+         bot.reply_to(m, "❌ КРИТИЧЕСКАЯ ОШИБКА: ID клиента не найден. Пожалуйста, ответьте на **самый первый лог-запрос**.")
+         return
 
     try:
+        # Отправляем сообщение администратора
         bot.send_message(
             chat_id=client_chat_id,
             text=m.text,
