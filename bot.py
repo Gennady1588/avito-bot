@@ -42,45 +42,63 @@ def proc_dep(m):
     except:
         return bot.send_message(m.chat.id, "Минимум 400₽")
 
-    bot.send_message(m.chat.id, f"Переведи *{amount}₽* на `{YOUR_CARD_NUMBER}`\nПосле оплаты — нажми кнопку",
-                     parse_mode='Markdown',
+    bot.send_message(m.chat.id, f"Переведи *{amount}₽* на `{YOUR_CARD_NUMBER}`", parse_mode='Markdown',
                      reply_markup=telebot.types.InlineKeyboardMarkup().add(
                          telebot.types.InlineKeyboardButton("Оплатил", url=f"t.me/{MANAGER_USERNAME}")))
 
     admin_text = f"ЗАПРОС НА ПОПОЛНЕНИЕ\nПользователь: @{m.from_user.username or 'нет'} (ID: {m.chat.id})\nСумма: {amount}₽"
     bot.send_message(OWNER_ID, admin_text)
 
-# =============== ТЫ ПРОСТО ОТВЕЧАЕШЬ РЕПЛАЕМ — ВСЁ УХОДИТ КЛИЕНТУ ===============
+# ====== ТЫ ПРОСТО ОТВЕЧАЕШЬ РЕПЛАЕМ — ВСЁ УХОДИТ КЛИЕНТУ КАК РЕПЛАЙ. БЕЗ ПРОВЕРОК. ======
 @bot.message_handler(func=lambda m: m.chat.id == OWNER_ID and m.reply_to_message)
 def admin_reply(m):
+    # m.reply_to_message — это сообщение, на которое ответил админ.
+    # Нам нужно найти ID чата пользователя и ID сообщения, на которое нужно ответить.
+    
+    client_chat_id = None
+    client_message_id = None
+    
+    # 1. Попытка получить ID чата пользователя из пересланного сообщения
+    if m.reply_to_message.forward_from:
+        client_chat_id = m.reply_to_message.forward_from.id
+        client_message_id = m.reply_to_message.forward_from_message_id
+    elif m.reply_to_message.chat.id != OWNER_ID:
+        # 2. Если сообщение не пересылалось и оно пришло от пользователя (не лог от бота)
+        client_chat_id = m.reply_to_message.chat.id
+        client_message_id = m.reply_to_message.message_id
+    
+    # 3. Запасной вариант: Ищем ID клиента в тексте реплая (например, в логе "ЗАПРОС НА ПОПОЛНЕНИЕ (ID: ...)")
+    if not client_chat_id or client_chat_id == OWNER_ID:
+        text = m.reply_to_message.text or ""
+        # Ищем ID в формате "ID: 123456789"
+        client_id_match = re.search(r'ID: (\d{8,12})', text) 
+        if client_id_match:
+            client_chat_id = int(client_id_match.group(1))
+            # В этом случае message_id неизвестен, реплай не получится
+            client_message_id = None
+        else:
+             bot.reply_to(m, "Не удалось найти ID клиента для ответа.")
+             return # Прерываем, так как не знаем, кому отвечать
+
     try:
-        orig = m.reply_to_message
-        text = orig.text or ""
+        if client_message_id:
+            # Отправляем сообщение администратора как реплай
+            bot.send_message(
+                chat_id=client_chat_id,
+                text=m.text, # Используем текст сообщения админа
+                reply_to_message_id=client_message_id
+            )
+        else:
+            # Если message_id не найден, просто отправляем сообщение
+            bot.send_message(
+                chat_id=client_chat_id,
+                text=m.text
+            )
+            
+        bot.reply_to(m, f"Отправлено клиенту (ID: {client_chat_id}).")
 
-        # Ищем ID — если не нашли, то всё равно отправляем (главное — реплай был)
-        client_id = None
-        match = re.search(r'\(ID:\s*(\d+)\)|ID[:\s]*(\d+)', text)
-        if match:
-            client_id = int(match.group(1) or match.group(2))
-
-        # Если это пополнение и ты написал просто цифру — зачисляем
-        if client_id and "ПОПОЛНЕНИЕ" in text.upper() and m.text.strip().isdigit():
-            amount = int(m.text.strip())
-            user_balances[client_id] = get_balance(client_id) + amount
-            bot.send_message(client_id, f"Баланс пополнен на *{amount}₽*\nТеперь: *{get_balance(client_id)}₽*", parse_mode='Markdown', reply_markup=main_menu())
-            bot.reply_to(m, f"Зачислено +{amount}₽")
-            return
-
-        # Просто пересылаем сообщение клиенту (любое: текст, фото, голосовуху и т.д.)
-        bot.copy_message(client_id or OWNER_ID, OWNER_ID, m.message_id)
-
-        # Кнопка "ещё написать"
-        kb = telebot.types.InlineKeyboardMarkup()
-        kb.add(telebot.types.InlineKeyboardButton("Написать ещё", url=f"t.me/{bot.get_me().username}?start={client_id}"))
-        bot.reply_to(m, "Отправлено клиенту", reply_markup=kb)
-
-    except:
-        bot.reply_to(m, "Отправлено")
+    except Exception as e:
+        bot.reply_to(m, f"Ошибка при отправке: {e}")
 
 @app.route(f'/{TOKEN}', methods=['POST'])
 def webhook():
@@ -91,6 +109,6 @@ def webhook():
     return '', 403
 
 if __name__ == '__main__':
-    print("Бот запущен — просто отвечай реплаем, ошибок больше НЕТ")
+    print("Бот запущен. Для ответов клиентам используй реплай на их сообщения в чате с ботом.")
     bot.remove_webhook()
     bot.infinity_polling(none_stop=True)
