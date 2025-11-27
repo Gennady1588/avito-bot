@@ -46,38 +46,39 @@ def proc_dep(m):
                      reply_markup=telebot.types.InlineKeyboardMarkup().add(
                          telebot.types.InlineKeyboardButton("Оплатил", url=f"t.me/{MANAGER_USERNAME}")))
 
-    admin_text = f"ЗАПРОС НА ПОПОЛНЕНИЕ\nПользователь: @{m.from_user.username or 'нет'} (ID: {m.chat.id})\nСумма: {amount}₽"
+    admin_text = f"💰 ЗАПРОС НА ПОПОЛНЕНИЕ 💰\n\nПользователь: @{m.from_user.username or 'нет'} (ID: {m.chat.id})\nЖелаемая сумма: {amount} ₽\nКарта для проверки: {YOUR_CARD_NUMBER}\n\n➡️ Необходимо проверить поступление: {amount} ₽\nОтветьте реплаем, чтобы подтвердить получение средств. Для зачисления используйте /add_balance {amount}"
     bot.send_message(OWNER_ID, admin_text)
 
 # ====== ТЫ ПРОСТО ОТВЕЧАЕШЬ РЕПЛАЕМ — ВСЁ УХОДИТ КЛИЕНТУ КАК РЕПЛАЙ. БЕЗ ПРОВЕРОК. ======
 @bot.message_handler(func=lambda m: m.chat.id == OWNER_ID and m.reply_to_message)
 def admin_reply(m):
-    # m.reply_to_message — это сообщение, на которое ответил админ.
     
     client_chat_id = None
     client_message_id = None
     
-    # 1. Попытка получить ID чата пользователя из пересланного сообщения
-    if m.reply_to_message.forward_from:
-        client_chat_id = m.reply_to_message.forward_from.id
-        client_message_id = m.reply_to_message.forward_from_message_id
-    elif m.reply_to_message.chat.id != OWNER_ID:
-        # 2. Если сообщение не пересылалось и оно пришло от пользователя (не лог от бота)
-        client_chat_id = m.reply_to_message.chat.id
-        client_message_id = m.reply_to_message.message_id
+    reply_to = m.reply_to_message
     
+    # 1. Приоритет: Если админ отвечает на ПЕРЕСЛАННОЕ сообщение (самый надежный способ)
+    if reply_to.forward_from:
+        client_chat_id = reply_to.forward_from.id
+        client_message_id = reply_to.forward_from_message_id
+        
+    # 2. Если сообщение не пересылалось и оно пришло от пользователя (не лог от бота)
+    elif reply_to.chat.id != OWNER_ID:
+        client_chat_id = reply_to.chat.id
+        client_message_id = reply_to.message_id
+        
     # 3. Запасной вариант: Ищем ID клиента в тексте реплая (для логов типа "ЗАПРОС НА ПОПОЛНЕНИЕ")
     if not client_chat_id or client_chat_id == OWNER_ID:
-        text = m.reply_to_message.text or ""
-        # Улучшенная регулярка для поиска ID в формате "(ID: 123456789)"
-        client_id_match = re.search(r'\(ID:\s*(\d{8,12})\)', text) 
+        text = reply_to.text or ""
+        # Гибкая регулярка: ищем "ID:" с возможными пробелами и скобками вокруг
+        client_id_match = re.search(r'(?:ID:\s*)\(?(\d{8,12})\)?', text)
         if client_id_match:
             client_chat_id = int(client_id_match.group(1))
-            # В этом случае message_id неизвестен, реплай на сообщение клиента не получится, 
-            # но сообщение будет отправлено в его чат.
-            client_message_id = None 
+            # В этом случае message_id неизвестен
+            client_message_id = None
         else:
-             bot.reply_to(m, "❌ ОШИБКА: ID клиента не найден в тексте реплая!")
+             bot.reply_to(m, "❌ ОШИБКА: ID клиента не найден в тексте реплая! Пожалуйста, отвечайте на сообщение, где явно указан ID.")
              return
 
     try:
@@ -89,17 +90,16 @@ def admin_reply(m):
                 reply_to_message_id=client_message_id
             )
         else:
-            # Если message_id не найден, просто отправляем сообщение в чат клиента
+            # Если message_id не найден (отвечаем на лог), просто отправляем сообщение в чат клиента
             bot.send_message(
                 chat_id=client_chat_id,
                 text=m.text
             )
             
-        bot.reply_to(m, f"Отправлено клиенту (ID: {client_chat_id}).")
+        bot.reply_to(m, f"✅ Отправлено клиенту (ID: {client_chat_id}).")
 
     except Exception as e:
-        # Ошибка, например, если клиент заблокировал бота
-        bot.reply_to(m, f"Ошибка при отправке: возможно, клиент заблокировал бота. Детали: {e}")
+        bot.reply_to(m, f"⚠️ Ошибка при отправке. Возможно, клиент заблокировал бота. Детали: {e}")
 
 @app.route(f'/{TOKEN}', methods=['POST'])
 def webhook():
