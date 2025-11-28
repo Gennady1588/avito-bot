@@ -16,26 +16,28 @@ YOUR_CARD_NUMBER = "2204320348572225"
 def get_balance(uid):
     return user_balances.get(uid, 0)
 
-# ----------------- КНОПКИ И МЕНЮ -----------------
+# ----------------- КНОПКИ КЛИЕНТА (ТОЛЬКО INLINE) -----------------
 
 def main_menu():
     k = telebot.types.InlineKeyboardMarkup()
-    k.add(telebot.types.InlineKeyboardButton("Личный кабинет", callback_data="account"))
+    k.add(
+        telebot.types.InlineKeyboardButton("Личный кабинет", callback_data="account")
+    )
+    # Добавьте сюда другие кнопки, которые были у клиента, как inline
     return k
 
 # ----------------- ОБРАБОТЧИКИ КЛИЕНТА -----------------
 
 @bot.message_handler(commands=['start'])
 def start(m):
-    reply_markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
-    reply_markup.add(telebot.types.KeyboardButton("👤 Кабинет"))
-    bot.send_message(m.chat.id, "Avito ПФ Услуги 2025", reply_markup=reply_markup)
+    # Теперь здесь нет ReplyKeyboardMarkup, чтобы не было конфликтов
+    bot.send_message(m.chat.id, "Добро пожаловать в Avito ПФ Услуги 2025!", reply_markup=main_menu())
 
-@bot.message_handler(func=lambda m: m.text == "👤 Кабинет")
-def show_account_from_button(m):
+@bot.callback_query_handler(func=lambda c: c.data == "account")
+def acc(c):
     k = telebot.types.InlineKeyboardMarkup()
     k.add(telebot.types.InlineKeyboardButton("Пополнить", callback_data="deposit"))
-    bot.send_message(m.chat.id, f"Баланс: *{get_balance(m.chat.id)}₽*", parse_mode='Markdown', reply_markup=k)
+    bot.edit_message_text(f"Баланс: *{get_balance(c.from_user.id)}₽*", c.message.chat.id, c.message.message_id, parse_mode='Markdown', reply_markup=k)
 
 @bot.callback_query_handler(func=lambda c: c.data == "deposit")
 def dep(c):
@@ -111,8 +113,8 @@ def admin_reply_simple(m):
     client_chat_id = extract_client_id_from_text(replied_message_text)
 
     if not client_chat_id:
-        # Эта ошибка должна срабатывать только при неудаче чтения реплая
-        return bot.reply_to(m, "❌ ID клиента для пересылки ответа не найден. Ответьте на лог-сообщение, где указан ID.")
+        # Теперь эта ошибка почти гарантированно означает проблему с вашим аккаунтом
+        return bot.reply_to(m, "❌ ID клиента для пересылки ответа не найден. Вероятно, ваш Telegram-клиент не передает текст лога. Используйте команду /add для начисления.")
 
     try:
         # Отправляем сообщение администратора
@@ -130,6 +132,8 @@ def admin_reply_simple(m):
 if __name__ == '__main__':
     print("🤖 Бот запущен в режиме Long Polling. Отвечай реплаем на сообщения!")
     try:
+        # УДАЛЯЕМ ВСЕ ПРЕДЫДУЩИЕ ReplyKeyboardMarkup при запуске
+        bot.set_my_commands([])
         bot.remove_webhook()
         bot.infinity_polling(none_stop=True)
     except Exception as e:
