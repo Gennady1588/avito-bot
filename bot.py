@@ -9,11 +9,13 @@ OWNER_ID = 1641571790 # ID Геннадия
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__) 
 
+# 💡 ХРАНЕНИЕ БАЛАНСА: Используем словарь для хранения данных клиентов
 user_balances = {} 
 MANAGER_USERNAME = "Hiluxe56"
 YOUR_CARD_NUMBER = "2204320348572225"
 
 def get_balance(uid):
+    """Функция для получения баланса клиента. Если баланса нет, возвращает 0."""
     return user_balances.get(uid, 0)
 
 # ----------------- КНОПКИ КЛИЕНТА (ТОЛЬКО INLINE) -----------------
@@ -29,14 +31,16 @@ def main_menu():
 
 @bot.message_handler(commands=['start'])
 def start(m):
-    # Теперь здесь нет ReplyKeyboardMarkup, чтобы не было конфликтов
+    # Начальное меню с Inline-кнопками
     bot.send_message(m.chat.id, "Добро пожаловать в Avito ПФ Услуги 2025!", reply_markup=main_menu())
 
 @bot.callback_query_handler(func=lambda c: c.data == "account")
 def acc(c):
+    # 💡 ОТОБРАЖЕНИЕ БАЛАНСА: Получаем текущий баланс и показываем его
+    current_balance = get_balance(c.from_user.id)
     k = telebot.types.InlineKeyboardMarkup()
     k.add(telebot.types.InlineKeyboardButton("Пополнить", callback_data="deposit"))
-    bot.edit_message_text(f"Баланс: *{get_balance(c.from_user.id)}₽*", c.message.chat.id, c.message.message_id, parse_mode='Markdown', reply_markup=k)
+    bot.edit_message_text(f"Баланс: *{current_balance}₽*", c.message.chat.id, c.message.message_id, parse_mode='Markdown', reply_markup=k)
 
 @bot.callback_query_handler(func=lambda c: c.data == "deposit")
 def dep(c):
@@ -54,28 +58,20 @@ def proc_dep(m):
                      reply_markup=telebot.types.InlineKeyboardMarkup().add(
                          telebot.types.InlineKeyboardButton("Оплатил", url=f"t.me/{MANAGER_USERNAME}")))
 
-    # ЛОГ ДЛЯ АДМИНА: Указываем команду для начисления
+    # ЛОГ ДЛЯ АДМИНА: Указываем команду для начисления (без реплая)
     admin_text = f"💰 ЗАПРОС НА ПОПОЛНЕНИЕ 💰\n\nПользователь: @{m.from_user.username or 'нет'} ID: {m.chat.id}\nЖелаемая сумма: {amount} ₽\nКарта для проверки: {YOUR_CARD_NUMBER}\n\n➡️ Начислить: /add {m.chat.id} {amount}"
     
     bot.send_message(OWNER_ID, admin_text)
 
-# ----------------- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ -----------------
+# ----------------- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (для поиска ID) -----------------
 
 def extract_client_id_from_text(text):
-    """ Находит ID клиента в тексте сообщения: ищет 'ID: [цифры]' """
+    """ Агрессивный поиск ID клиента в тексте сообщения """
     if not text:
         return None
-    
-    # 🔥 АГРЕССИВНЫЙ ПОИСК 1: Ищем "ID: " за которым следуют 8-12 цифр
     match = re.search(r'ID:\s*(\d{8,12})', text) 
     if match:
         return int(match.group(1))
-
-    # 🔥 АГРЕССИВНЫЙ ПОИСК 2: Ищем голые 8-12 цифр в начале или конце строки (как последнее средство)
-    match = re.search(r'\b(\d{8,12})\b', text)
-    if match:
-        return int(match.group(1))
-        
     return None
 
 # ----------------- ОБРАБОТЧИК АДМИНИСТРАТОРА: НАЧИСЛЕНИЕ (ЧЕРЕЗ КОМАНДУ) -----------------
@@ -93,7 +89,7 @@ def add_balance_direct(m):
     except ValueError:
         return bot.reply_to(m, "❌ ID клиента и сумма должны быть числами.")
 
-    # Начисление баланса
+    # 💡 ОБНОВЛЕНИЕ БАЛАНСА: Начисляем средства
     user_balances[client_chat_id] = user_balances.get(client_chat_id, 0) + amount
     
     # Отправка подтверждения администратору
@@ -116,15 +112,11 @@ def add_balance_direct(m):
 def admin_reply_simple(m):
     
     replied_message_text = m.reply_to_message.text or ""
-    
-    # Пробуем достать ID двумя агрессивными способами
     client_chat_id = extract_client_id_from_text(replied_message_text)
 
-    # Если ID не найден, сообщаем об ошибке и даем инструкции
+    # 🤫 Молчаливый выход, если ID не найден в реплае (чтобы не спамить ошибкой)
     if not client_chat_id:
-        # Мы снова возвращаем ошибку, но с четкой инструкцией, 
-        # чтобы вы знали, что нужно использовать /add
-        return bot.reply_to(m, "❌ ОШИБКА. ID клиента не найден. Для начисления используйте /add {ID} {сумма}.")
+        return 
 
     try:
         # Отправляем сообщение администратора
@@ -142,6 +134,7 @@ def admin_reply_simple(m):
 if __name__ == '__main__':
     print("🤖 Бот запущен в режиме Long Polling. Отвечай реплаем на сообщения!")
     try:
+        # Удаляем лишние команды, если они остались
         bot.set_my_commands([])
         bot.remove_webhook()
         bot.infinity_polling(none_stop=True)
